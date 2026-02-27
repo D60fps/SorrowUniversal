@@ -1,7 +1,6 @@
-local getgenv = getgenv or genv or (function() return getfenv(0) end)
 --// Cache
 
-local select, next, tostring, pcall, setmetatable = select, next, tostring, pcall, setmetatable
+local select, next, tostring, pcall, getgenv, setmetatable = select, next, tostring, pcall, getgenv, setmetatable
 local mathfloor, mathabs, mathcos, mathsin, mathrad, mathsqrt = math.floor, math.abs, math.cos, math.sin, math.rad, math.sqrt
 local wait = task.wait
 local Vector2new, Vector3new, Vector3zero, CFramenew, Drawingnew, Color3fromRGB = Vector2.new, Vector3.new, Vector3.zero, CFrame.new, Drawing.new, Color3.fromRGB
@@ -163,7 +162,9 @@ local function AssignRigType(Player)
     elseif Player.Character:FindFirstChild("LowerTorso") and not Player.Character:FindFirstChild("Torso") then
         PlayerTable.RigType = "R15"
     else
-        repeat AssignRigType(Player) until PlayerTable.RigType
+        repeat wait(0.5) until Player.Character
+            and (Player.Character:FindFirstChild("Torso") or Player.Character:FindFirstChild("LowerTorso"))
+        AssignRigType(Player)
     end
 end
 
@@ -203,7 +204,7 @@ end
 local function UpdateCham(Part, Cham)
     local CS = Environment.Visuals.ChamsSettings
     local CorFrame, PartSize = Part.CFrame, Part.Size / 2
-    local _, vis = WorldToViewportPoint(CorFrame * CFramenew(PartSize.X / 2, PartSize.Y / 2, PartSize.Z / 2).Position)
+    local _, vis = WorldToViewportPoint((CorFrame * CFramenew(PartSize.X, PartSize.Y, PartSize.Z)).Position)
 
     if vis and CS.Enabled then
         -- Build the 8 corners once
@@ -292,8 +293,10 @@ local Visuals = {
                     BuildRig(); oldEntireBody = Environment.Visuals.ChamsSettings.EntireBody
                 end
                 for name, cham in next, PlayerTable.Chams do
-                    local part = Player.Character:WaitForChild(name, math.huge)
-                    UpdateCham(part, cham)
+                    local part = Player.Character and Player.Character:FindFirstChild(name)
+                    if part then
+                        UpdateCham(part, cham)
+                    end
                 end
             else
                 for _, cham in next, PlayerTable.Chams do
