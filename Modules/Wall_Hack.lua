@@ -162,9 +162,7 @@ local function AssignRigType(Player)
     elseif Player.Character:FindFirstChild("LowerTorso") and not Player.Character:FindFirstChild("Torso") then
         PlayerTable.RigType = "R15"
     else
-        repeat wait(0.5) until Player.Character
-            and (Player.Character:FindFirstChild("Torso") or Player.Character:FindFirstChild("LowerTorso"))
-        AssignRigType(Player)
+        repeat AssignRigType(Player) until PlayerTable.RigType
     end
 end
 
@@ -204,7 +202,7 @@ end
 local function UpdateCham(Part, Cham)
     local CS = Environment.Visuals.ChamsSettings
     local CorFrame, PartSize = Part.CFrame, Part.Size / 2
-    local _, vis = WorldToViewportPoint((CorFrame * CFramenew(PartSize.X, PartSize.Y, PartSize.Z)).Position)
+    local _, vis = WorldToViewportPoint(CorFrame * CFramenew(PartSize.X / 2, PartSize.Y / 2, PartSize.Z / 2).Position)
 
     if vis and CS.Enabled then
         -- Build the 8 corners once
@@ -293,10 +291,8 @@ local Visuals = {
                     BuildRig(); oldEntireBody = Environment.Visuals.ChamsSettings.EntireBody
                 end
                 for name, cham in next, PlayerTable.Chams do
-                    local part = Player.Character and Player.Character:FindFirstChild(name)
-                    if part then
-                        UpdateCham(part, cham)
-                    end
+                    local part = Player.Character:WaitForChild(name, math.huge)
+                    UpdateCham(part, cham)
                 end
             else
                 for _, cham in next, PlayerTable.Chams do
