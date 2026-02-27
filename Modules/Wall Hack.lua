@@ -1,6 +1,7 @@
+local getgenv = getgenv or genv or (function() return getfenv(0) end)
 --// Cache
 
-local select, next, tostring, pcall, getgenv, setmetatable = select, next, tostring, pcall, getgenv, setmetatable
+local select, next, tostring, pcall, setmetatable = select, next, tostring, pcall, setmetatable
 local mathfloor, mathabs, mathcos, mathsin, mathrad, mathsqrt = math.floor, math.abs, math.cos, math.sin, math.rad, math.sqrt
 local wait = task.wait
 local Vector2new, Vector3new, Vector3zero, CFramenew, Drawingnew, Color3fromRGB = Vector2.new, Vector3.new, Vector3.zero, CFrame.new, Drawing.new, Color3.fromRGB
