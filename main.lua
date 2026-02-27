@@ -1,4 +1,5 @@
-local loadstring, getgenv, setclipboard, tablefind, UserInputService = loadstring, getgenv, setclipboard, table.find, game:GetService("UserInputService")
+local loadstring, setclipboard, tablefind, UserInputService = loadstring, setclipboard, table.find, game:GetService("UserInputService")
+local getgenv = getgenv or genv or (function() return getfenv(0) end)
 local HttpService = game:GetService("HttpService")
 
 --// Loaded check
