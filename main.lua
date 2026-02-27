@@ -168,6 +168,7 @@ end
 local function ApplySnapshot(S)
     local A  = Aimbot.Settings
     local AF = Aimbot.FOVSettings
+    local SA = Aimbot.SilentAim
     local WS = WallHack.Settings
     local WE = WallHack.Visuals.ESPSettings
     local WB = WallHack.Visuals.BoxSettings
@@ -275,8 +276,11 @@ local function ApplySnapshot(S)
     setC(XS,"CenterDotColor",       S.XH_CenterDotColor)
 end
 
+-- Forward declarations (referenced by task.spawn below)
+local SaveConfig, LoadConfig
+
 -- Public save
-local function SaveConfig()
+SaveConfig = function()
     if not FS_SUPPORTED then warn("[AirHub] Filesystem not supported on this executor - config will not save.") return end
     local ok, err = pcall(function()
         EnsureFolder()
@@ -290,7 +294,7 @@ local function SaveConfig()
 end
 
 -- Public load — applies settings then calls Library.ResetAll() so the UI reflects them
-local function LoadConfig()
+LoadConfig = function()
     if not FS_SUPPORTED then return end
     local ok, err = pcall(function()
         if not isfile(CONFIG_FILE) then
