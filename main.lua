@@ -14,7 +14,7 @@ getgenv().AirHub = {}
 
 --// Load Library first so GUI can appear even if a module errors
 
-local Library = loadstring(game:GetObjects("rbxassetid://7657867786")[1].Source)()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/padzeraa/pepsi-library/main/source.lua"))()
 
 --// Load Modules (guarded so a network/script error doesn't silently kill the GUI)
 
@@ -24,11 +24,14 @@ end)
 if not ok1 then warn("[AirHub] Aimbot module failed to load: " .. tostring(err1)) end
 
 local ok2, err2 = pcall(function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/D60fps/SorrowUniversal/main/Modules/Wall%20Hack.lua"))()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/D60fps/SorrowUniversal/main/Modules/Wall_Hack.lua"))()
 end)
 if not ok2 then warn("[AirHub] WallHack module failed to load: " .. tostring(err2)) end
-local Aimbot   = getgenv().AirHub.Aimbot   or error("[AirHub] Aimbot module did not initialise — check executor console for errors.")
-local WallHack = getgenv().AirHub.WallHack or error("[AirHub] WallHack module did not initialise — check executor console for errors.")
+local Aimbot   = getgenv().AirHub.Aimbot
+local WallHack = getgenv().AirHub.WallHack
+if not Aimbot   then warn("[AirHub] Aimbot module did not initialise.") end
+if not WallHack then warn("[AirHub] WallHack module did not initialise.") end
+if not Aimbot or not WallHack then return end
 local Parts, Fonts, TracersType = {"Head","HumanoidRootPart","Torso","Left Arm","Right Arm","Left Leg","Right Leg","LeftHand","RightHand","LeftLowerArm","RightLowerArm","LeftUpperArm","RightUpperArm","LeftFoot","LeftLowerLeg","UpperTorso","LeftUpperLeg","RightFoot","RightLowerLeg","LowerTorso","RightUpperLeg"}, {"UI","System","Plex","Monospace"}, {"Bottom","Center","Mouse"}
 
 -- ══════════════════════════════════════════════════
@@ -352,13 +355,7 @@ local function StartBind(labelElement)
     end)
 end
 
---// Unload
-
-Library.UnloadCallback = function()
-    Aimbot.Functions:Exit()
-    WallHack.Functions:Exit()
-    getgenv().AirHub = nil
-end
+--// Unload (set after MainFrame is created below)
 
 --// ────────────────────────────────────────────────
 --//  DEEP BLACK / CRIMSON ACCENT THEME
@@ -398,6 +395,12 @@ local MainFrame = Library:CreateWindow({
         "__Designer.Background.UseBackgroundImage":false
     }]]
 })
+
+Library.UnloadCallback = function()
+    Aimbot.Functions:Exit()
+    WallHack.Functions:Exit()
+    getgenv().AirHub = nil
+end
 
 --// ────────────────────────────────────────────────
 --//  TABS
