@@ -1,6 +1,6 @@
 --// Cache
 
-local loadstring, setclipboard, tablefind, UserInputService = loadstring, setclipboard, table.find, game:GetService("UserInputService")
+local tablefind, UserInputService = table.find, game:GetService("UserInputService")
 local getgenv = getgenv or genv or (function() return getfenv(0) end)
 local HttpService = game:GetService("HttpService")
 
@@ -32,9 +32,9 @@ local WallHack = getgenv().AirHub.WallHack
 if not Aimbot   then warn("[AirHub] Aimbot is nil - check module URL") return end
 if not WallHack then warn("[AirHub] WallHack is nil - check module URL") return end
 
---// Load Orion Library
+--// Load Rayfield
 
-local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/shlexware/Orion/main/source"))()
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 --// Variables
 
@@ -185,7 +185,7 @@ end)
 
 local BindingKey = false
 
-local function StartBind(callback)
+local function StartBind()
     BindingKey = true
     local conn
     conn = UserInputService.InputBegan:Connect(function(input)
@@ -193,713 +193,688 @@ local function StartBind(callback)
             BindingKey = false
             local keyName = input.KeyCode.Name ~= "Unknown" and input.KeyCode.Name or input.UserInputType.Name
             Aimbot.Settings.TriggerKey = keyName
-            if callback then callback(keyName) end
             conn:Disconnect()
         end
     end)
 end
 
 -- ══════════════════════════════════════════════════
---  ORION WINDOW
+--  RAYFIELD WINDOW
 -- ══════════════════════════════════════════════════
 
-local Window = OrionLib:MakeWindow({
-    Name            = "SORROW  ·  AIRHUB  ·  V3",
-    HidePremium     = false,
-    SaveConfig      = false,
-    ConfigFileName  = "AirHub",
-    IntroEnabled    = true,
-    IntroText       = "AIRHUB V3",
-    CloseCallback   = function()
-        Aimbot.Functions:Exit()
-        WallHack.Functions:Exit()
-        getgenv().AirHub = nil
-    end
+local Window = Rayfield:CreateWindow({
+    Name               = "AirHub V3",
+    LoadingTitle       = "AirHub V3",
+    LoadingSubtitle    = "sorrow.cc",
+    ConfigurationSaving = { Enabled = false },
+    Discord            = { Enabled = false },
+    KeySystem          = false
 })
 
 -- ══════════════════════════════════════════════════
 --  TABS
 -- ══════════════════════════════════════════════════
 
-local AimbotTab    = Window:MakeTab({ Name = "Aimbot",    Icon = "rbxassetid://4483345998", PremiumOnly = false })
-local VisualsTab   = Window:MakeTab({ Name = "Visuals",   Icon = "rbxassetid://4483345998", PremiumOnly = false })
-local CrosshairTab = Window:MakeTab({ Name = "Crosshair", Icon = "rbxassetid://4483345998", PremiumOnly = false })
-local ConfigTab    = Window:MakeTab({ Name = "Config",    Icon = "rbxassetid://4483345998", PremiumOnly = false })
+local AimbotTab    = Window:CreateTab("Aimbot",    "crosshair")
+local VisualsTab   = Window:CreateTab("Visuals",   "eye")
+local CrosshairTab = Window:CreateTab("Crosshair", "circle-dot")
+local ConfigTab    = Window:CreateTab("Config",    "settings")
 
 -- ══════════════════════════════════════════════════
---  AIMBOT TAB
+--  AIMBOT
 -- ══════════════════════════════════════════════════
 
-local AimbotSection = AimbotTab:AddSection({ Name = "Aimbot" })
+local AimbotSection = AimbotTab:CreateSection("Aimbot")
 
-AimbotSection:AddToggle({
-    Name     = "Enable Aimbot",
-    Default  = Aimbot.Settings.Enabled,
-    Callback = function(v) Aimbot.Settings.Enabled = v end
+AimbotTab:CreateToggle({
+    Name         = "Enable Aimbot",
+    CurrentValue = Aimbot.Settings.Enabled,
+    Flag         = "AimEnabled",
+    Callback     = function(v) Aimbot.Settings.Enabled = v end
 })
 
-AimbotSection:AddToggle({
-    Name     = "Toggle Mode",
-    Default  = Aimbot.Settings.Toggle,
-    Callback = function(v) Aimbot.Settings.Toggle = v end
+AimbotTab:CreateToggle({
+    Name         = "Toggle Mode",
+    CurrentValue = Aimbot.Settings.Toggle,
+    Flag         = "AimToggle",
+    Callback     = function(v) Aimbot.Settings.Toggle = v end
 })
 
-AimbotSection:AddSlider({
-    Name      = "Smoothing",
-    Min       = 0,
-    Max       = 1,
-    Default   = Aimbot.Settings.Sensitivity,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 0.01,
-    Callback  = function(v) Aimbot.Settings.Sensitivity = v end
+AimbotTab:CreateSlider({
+    Name         = "Smoothing",
+    Range        = {0, 1},
+    Increment    = 0.01,
+    Suffix       = "",
+    CurrentValue = Aimbot.Settings.Sensitivity,
+    Flag         = "AimSmoothing",
+    Callback     = function(v) Aimbot.Settings.Sensitivity = v end
 })
 
-AimbotSection:AddButton({
+AimbotTab:CreateButton({
     Name     = "Bind Key: " .. tostring(Aimbot.Settings.TriggerKey),
     Callback = function() StartBind() end
 })
 
-local TargetingSection = AimbotTab:AddSection({ Name = "Targeting" })
+local TargetingSection = AimbotTab:CreateSection("Targeting")
 
-TargetingSection:AddDropdown({
-    Name     = "Aim Part",
-    Default  = 1,
-    Options  = Parts,
-    Callback = function(v) Aimbot.Settings.LockPart = v end
+AimbotTab:CreateDropdown({
+    Name         = "Aim Part",
+    Options      = Parts,
+    CurrentOption = {"Head"},
+    Flag         = "AimPart",
+    Callback     = function(v) Aimbot.Settings.LockPart = v[1] or v end
 })
 
-TargetingSection:AddToggle({
-    Name     = "Team Check",
-    Default  = Aimbot.Settings.TeamCheck,
-    Callback = function(v) Aimbot.Settings.TeamCheck = v end
+AimbotTab:CreateToggle({
+    Name         = "Team Check",
+    CurrentValue = Aimbot.Settings.TeamCheck,
+    Flag         = "AimTeamCheck",
+    Callback     = function(v) Aimbot.Settings.TeamCheck = v end
 })
 
-TargetingSection:AddToggle({
-    Name     = "Wall Check",
-    Default  = Aimbot.Settings.WallCheck,
-    Callback = function(v) Aimbot.Settings.WallCheck = v end
+AimbotTab:CreateToggle({
+    Name         = "Wall Check",
+    CurrentValue = Aimbot.Settings.WallCheck,
+    Flag         = "AimWallCheck",
+    Callback     = function(v) Aimbot.Settings.WallCheck = v end
 })
 
-TargetingSection:AddToggle({
-    Name     = "Alive Check",
-    Default  = Aimbot.Settings.AliveCheck,
-    Callback = function(v) Aimbot.Settings.AliveCheck = v end
+AimbotTab:CreateToggle({
+    Name         = "Alive Check",
+    CurrentValue = Aimbot.Settings.AliveCheck,
+    Flag         = "AimAliveCheck",
+    Callback     = function(v) Aimbot.Settings.AliveCheck = v end
 })
 
-TargetingSection:AddToggle({
-    Name     = "Third Person",
-    Default  = Aimbot.Settings.ThirdPerson,
-    Callback = function(v) Aimbot.Settings.ThirdPerson = v end
+AimbotTab:CreateToggle({
+    Name         = "Third Person",
+    CurrentValue = Aimbot.Settings.ThirdPerson,
+    Flag         = "AimThirdPerson",
+    Callback     = function(v) Aimbot.Settings.ThirdPerson = v end
 })
 
-TargetingSection:AddSlider({
-    Name      = "3P Sensitivity",
-    Min       = 1,
-    Max       = 10,
-    Default   = Aimbot.Settings.ThirdPersonSensitivity,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 0.1,
-    Callback  = function(v) Aimbot.Settings.ThirdPersonSensitivity = v end
+AimbotTab:CreateSlider({
+    Name         = "3P Sensitivity",
+    Range        = {1, 10},
+    Increment    = 0.1,
+    Suffix       = "x",
+    CurrentValue = Aimbot.Settings.ThirdPersonSensitivity,
+    Flag         = "Aim3PSens",
+    Callback     = function(v) Aimbot.Settings.ThirdPersonSensitivity = v end
 })
 
-local SilentAimSection = AimbotTab:AddSection({ Name = "Silent Aim" })
+local SilentAimSection = AimbotTab:CreateSection("Silent Aim")
 
-SilentAimSection:AddToggle({
-    Name     = "Enable Silent Aim",
-    Default  = Aimbot.SilentAim.Enabled,
-    Callback = function(v) Aimbot.SilentAim.Enabled = v end
+AimbotTab:CreateToggle({
+    Name         = "Enable Silent Aim",
+    CurrentValue = Aimbot.SilentAim.Enabled,
+    Flag         = "SAEnabled",
+    Callback     = function(v) Aimbot.SilentAim.Enabled = v end
 })
 
-SilentAimSection:AddDropdown({
-    Name     = "Lock Part",
-    Default  = 1,
-    Options  = Parts,
-    Callback = function(v) Aimbot.SilentAim.LockPart = v end
+AimbotTab:CreateDropdown({
+    Name          = "SA Lock Part",
+    Options       = Parts,
+    CurrentOption = {"Head"},
+    Flag          = "SALockPart",
+    Callback      = function(v) Aimbot.SilentAim.LockPart = v[1] or v end
 })
 
-SilentAimSection:AddToggle({
-    Name     = "Team Check",
-    Default  = Aimbot.SilentAim.TeamCheck,
-    Callback = function(v) Aimbot.SilentAim.TeamCheck = v end
+AimbotTab:CreateToggle({
+    Name         = "SA Team Check",
+    CurrentValue = Aimbot.SilentAim.TeamCheck,
+    Flag         = "SATeamCheck",
+    Callback     = function(v) Aimbot.SilentAim.TeamCheck = v end
 })
 
-SilentAimSection:AddToggle({
-    Name     = "Alive Check",
-    Default  = Aimbot.SilentAim.AliveCheck,
-    Callback = function(v) Aimbot.SilentAim.AliveCheck = v end
+AimbotTab:CreateToggle({
+    Name         = "SA Alive Check",
+    CurrentValue = Aimbot.SilentAim.AliveCheck,
+    Flag         = "SAAliveCheck",
+    Callback     = function(v) Aimbot.SilentAim.AliveCheck = v end
 })
 
-SilentAimSection:AddToggle({
-    Name     = "Wall Check",
-    Default  = Aimbot.SilentAim.WallCheck,
-    Callback = function(v) Aimbot.SilentAim.WallCheck = v end
+AimbotTab:CreateToggle({
+    Name         = "SA Wall Check",
+    CurrentValue = Aimbot.SilentAim.WallCheck,
+    Flag         = "SAWallCheck",
+    Callback     = function(v) Aimbot.SilentAim.WallCheck = v end
 })
 
-SilentAimSection:AddToggle({
-    Name     = "Use FOV Limit",
-    Default  = Aimbot.SilentAim.UseFOV,
-    Callback = function(v) Aimbot.SilentAim.UseFOV = v end
+AimbotTab:CreateToggle({
+    Name         = "Use FOV Limit",
+    CurrentValue = Aimbot.SilentAim.UseFOV,
+    Flag         = "SAUseFOV",
+    Callback     = function(v) Aimbot.SilentAim.UseFOV = v end
 })
 
-SilentAimSection:AddSlider({
-    Name      = "FOV Radius",
-    Min       = 10,
-    Max       = 500,
-    Default   = Aimbot.SilentAim.FOVAmount,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 1,
-    Callback  = function(v) Aimbot.SilentAim.FOVAmount = v end
+AimbotTab:CreateSlider({
+    Name         = "SA FOV Radius",
+    Range        = {10, 500},
+    Increment    = 1,
+    Suffix       = "px",
+    CurrentValue = Aimbot.SilentAim.FOVAmount,
+    Flag         = "SAFOVAmount",
+    Callback     = function(v) Aimbot.SilentAim.FOVAmount = v end
 })
 
-SilentAimSection:AddSlider({
-    Name      = "Prediction",
-    Min       = 0,
-    Max       = 1,
-    Default   = Aimbot.SilentAim.Prediction,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 0.01,
-    Callback  = function(v) Aimbot.SilentAim.Prediction = v end
+AimbotTab:CreateSlider({
+    Name         = "Prediction",
+    Range        = {0, 1},
+    Increment    = 0.01,
+    Suffix       = "",
+    CurrentValue = Aimbot.SilentAim.Prediction,
+    Flag         = "SAPrediction",
+    Callback     = function(v) Aimbot.SilentAim.Prediction = v end
 })
 
-local FOVSection = AimbotTab:AddSection({ Name = "FOV Circle" })
+local FOVSection = AimbotTab:CreateSection("FOV Circle")
 
-FOVSection:AddToggle({
-    Name     = "Enable FOV",
-    Default  = Aimbot.FOVSettings.Enabled,
-    Callback = function(v) Aimbot.FOVSettings.Enabled = v end
+AimbotTab:CreateToggle({
+    Name         = "Enable FOV",
+    CurrentValue = Aimbot.FOVSettings.Enabled,
+    Flag         = "FOVEnabled",
+    Callback     = function(v) Aimbot.FOVSettings.Enabled = v end
 })
 
-FOVSection:AddToggle({
-    Name     = "Visible",
-    Default  = Aimbot.FOVSettings.Visible,
-    Callback = function(v) Aimbot.FOVSettings.Visible = v end
+AimbotTab:CreateToggle({
+    Name         = "Visible",
+    CurrentValue = Aimbot.FOVSettings.Visible,
+    Flag         = "FOVVisible",
+    Callback     = function(v) Aimbot.FOVSettings.Visible = v end
 })
 
-FOVSection:AddToggle({
-    Name     = "Filled",
-    Default  = Aimbot.FOVSettings.Filled,
-    Callback = function(v) Aimbot.FOVSettings.Filled = v end
+AimbotTab:CreateToggle({
+    Name         = "Filled",
+    CurrentValue = Aimbot.FOVSettings.Filled,
+    Flag         = "FOVFilled",
+    Callback     = function(v) Aimbot.FOVSettings.Filled = v end
 })
 
-FOVSection:AddSlider({
-    Name      = "Radius",
-    Min       = 10,
-    Max       = 300,
-    Default   = Aimbot.FOVSettings.Amount,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 1,
-    Callback  = function(v) Aimbot.FOVSettings.Amount = v end
+AimbotTab:CreateSlider({
+    Name         = "Radius",
+    Range        = {10, 300},
+    Increment    = 1,
+    Suffix       = "px",
+    CurrentValue = Aimbot.FOVSettings.Amount,
+    Flag         = "FOVAmount",
+    Callback     = function(v) Aimbot.FOVSettings.Amount = v end
 })
 
-FOVSection:AddSlider({
-    Name      = "Transparency",
-    Min       = 0,
-    Max       = 1,
-    Default   = Aimbot.FOVSettings.Transparency,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 0.05,
-    Callback  = function(v) Aimbot.FOVSettings.Transparency = v end
+AimbotTab:CreateSlider({
+    Name         = "Transparency",
+    Range        = {0, 1},
+    Increment    = 0.05,
+    Suffix       = "",
+    CurrentValue = Aimbot.FOVSettings.Transparency,
+    Flag         = "FOVTransparency",
+    Callback     = function(v) Aimbot.FOVSettings.Transparency = v end
 })
 
-FOVSection:AddSlider({
-    Name      = "Segments",
-    Min       = 3,
-    Max       = 100,
-    Default   = Aimbot.FOVSettings.Sides,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 1,
-    Callback  = function(v) Aimbot.FOVSettings.Sides = v end
+AimbotTab:CreateSlider({
+    Name         = "Segments",
+    Range        = {3, 100},
+    Increment    = 1,
+    Suffix       = "",
+    CurrentValue = Aimbot.FOVSettings.Sides,
+    Flag         = "FOVSides",
+    Callback     = function(v) Aimbot.FOVSettings.Sides = v end
 })
 
-FOVSection:AddSlider({
-    Name      = "Thickness",
-    Min       = 1,
-    Max       = 5,
-    Default   = Aimbot.FOVSettings.Thickness,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 1,
-    Callback  = function(v) Aimbot.FOVSettings.Thickness = v end
+AimbotTab:CreateSlider({
+    Name         = "Thickness",
+    Range        = {1, 5},
+    Increment    = 1,
+    Suffix       = "px",
+    CurrentValue = Aimbot.FOVSettings.Thickness,
+    Flag         = "FOVThickness",
+    Callback     = function(v) Aimbot.FOVSettings.Thickness = v end
 })
 
-FOVSection:AddColorpicker({
-    Name     = "Color",
-    Default  = Aimbot.FOVSettings.Color,
-    Callback = function(v) Aimbot.FOVSettings.Color = v end
+AimbotTab:CreateColorPicker({
+    Name         = "FOV Color",
+    Color        = Aimbot.FOVSettings.Color,
+    Flag         = "FOVColor",
+    Callback     = function(v) Aimbot.FOVSettings.Color = v end
 })
 
-FOVSection:AddColorpicker({
-    Name     = "Locked Color",
-    Default  = Aimbot.FOVSettings.LockedColor,
-    Callback = function(v) Aimbot.FOVSettings.LockedColor = v end
+AimbotTab:CreateColorPicker({
+    Name         = "Locked Color",
+    Color        = Aimbot.FOVSettings.LockedColor,
+    Flag         = "FOVLockedColor",
+    Callback     = function(v) Aimbot.FOVSettings.LockedColor = v end
 })
 
 -- ══════════════════════════════════════════════════
---  VISUALS TAB
+--  VISUALS
 -- ══════════════════════════════════════════════════
 
-local ESPSection = VisualsTab:AddSection({ Name = "ESP" })
+local ESPSection = VisualsTab:CreateSection("ESP")
 
-ESPSection:AddToggle({
-    Name     = "Enable ESP",
-    Default  = WallHack.Settings.Enabled,
-    Callback = function(v) WallHack.Settings.Enabled = v end
+VisualsTab:CreateToggle({
+    Name         = "Enable ESP",
+    CurrentValue = WallHack.Settings.Enabled,
+    Flag         = "ESPEnabled",
+    Callback     = function(v) WallHack.Settings.Enabled = v end
 })
 
-ESPSection:AddToggle({
-    Name     = "Team Check",
-    Default  = WallHack.Settings.TeamCheck,
-    Callback = function(v) WallHack.Settings.TeamCheck = v end
+VisualsTab:CreateToggle({
+    Name         = "Team Check",
+    CurrentValue = WallHack.Settings.TeamCheck,
+    Flag         = "ESPTeamCheck",
+    Callback     = function(v) WallHack.Settings.TeamCheck = v end
 })
 
-ESPSection:AddToggle({
-    Name     = "Alive Check",
-    Default  = WallHack.Settings.AliveCheck,
-    Callback = function(v) WallHack.Settings.AliveCheck = v end
+VisualsTab:CreateToggle({
+    Name         = "Alive Check",
+    CurrentValue = WallHack.Settings.AliveCheck,
+    Flag         = "ESPAliveCheck",
+    Callback     = function(v) WallHack.Settings.AliveCheck = v end
 })
 
-ESPSection:AddSlider({
-    Name      = "Max Distance",
-    Min       = 0,
-    Max       = 5000,
-    Default   = WallHack.Settings.MaxDistance,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 50,
-    Callback  = function(v) WallHack.Settings.MaxDistance = v end
+VisualsTab:CreateSlider({
+    Name         = "Max Distance",
+    Range        = {0, 5000},
+    Increment    = 50,
+    Suffix       = "studs",
+    CurrentValue = WallHack.Settings.MaxDistance,
+    Flag         = "ESPMaxDist",
+    Callback     = function(v) WallHack.Settings.MaxDistance = v end
 })
 
-local NameTagSection = VisualsTab:AddSection({ Name = "Name / Health Tags" })
+local NameTagSection = VisualsTab:CreateSection("Name / Health Tags")
 
-NameTagSection:AddToggle({
-    Name     = "Enable Tags",
-    Default  = WallHack.Visuals.ESPSettings.Enabled,
-    Callback = function(v) WallHack.Visuals.ESPSettings.Enabled = v end
+VisualsTab:CreateToggle({
+    Name         = "Enable Tags",
+    CurrentValue = WallHack.Visuals.ESPSettings.Enabled,
+    Flag         = "TagsEnabled",
+    Callback     = function(v) WallHack.Visuals.ESPSettings.Enabled = v end
 })
 
-NameTagSection:AddToggle({
-    Name     = "Show Name",
-    Default  = WallHack.Visuals.ESPSettings.DisplayName,
-    Callback = function(v) WallHack.Visuals.ESPSettings.DisplayName = v end
+VisualsTab:CreateToggle({
+    Name         = "Show Name",
+    CurrentValue = WallHack.Visuals.ESPSettings.DisplayName,
+    Flag         = "TagsName",
+    Callback     = function(v) WallHack.Visuals.ESPSettings.DisplayName = v end
 })
 
-NameTagSection:AddToggle({
-    Name     = "Show Health",
-    Default  = WallHack.Visuals.ESPSettings.DisplayHealth,
-    Callback = function(v) WallHack.Visuals.ESPSettings.DisplayHealth = v end
+VisualsTab:CreateToggle({
+    Name         = "Show Health",
+    CurrentValue = WallHack.Visuals.ESPSettings.DisplayHealth,
+    Flag         = "TagsHealth",
+    Callback     = function(v) WallHack.Visuals.ESPSettings.DisplayHealth = v end
 })
 
-NameTagSection:AddToggle({
-    Name     = "Show Distance",
-    Default  = WallHack.Visuals.ESPSettings.DisplayDistance,
-    Callback = function(v) WallHack.Visuals.ESPSettings.DisplayDistance = v end
+VisualsTab:CreateToggle({
+    Name         = "Show Distance",
+    CurrentValue = WallHack.Visuals.ESPSettings.DisplayDistance,
+    Flag         = "TagsDist",
+    Callback     = function(v) WallHack.Visuals.ESPSettings.DisplayDistance = v end
 })
 
-NameTagSection:AddSlider({
-    Name      = "Text Size",
-    Min       = 8,
-    Max       = 24,
-    Default   = WallHack.Visuals.ESPSettings.TextSize,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 1,
-    Callback  = function(v) WallHack.Visuals.ESPSettings.TextSize = v end
+VisualsTab:CreateSlider({
+    Name         = "Text Size",
+    Range        = {8, 24},
+    Increment    = 1,
+    Suffix       = "px",
+    CurrentValue = WallHack.Visuals.ESPSettings.TextSize,
+    Flag         = "TagsTextSize",
+    Callback     = function(v) WallHack.Visuals.ESPSettings.TextSize = v end
 })
 
-NameTagSection:AddSlider({
-    Name      = "Text Transparency",
-    Min       = 0,
-    Max       = 1,
-    Default   = WallHack.Visuals.ESPSettings.TextTransparency,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 0.05,
-    Callback  = function(v) WallHack.Visuals.ESPSettings.TextTransparency = v end
+VisualsTab:CreateColorPicker({
+    Name         = "Text Color",
+    Color        = WallHack.Visuals.ESPSettings.TextColor,
+    Flag         = "TagsTextColor",
+    Callback     = function(v) WallHack.Visuals.ESPSettings.TextColor = v end
 })
 
-NameTagSection:AddColorpicker({
-    Name     = "Text Color",
-    Default  = WallHack.Visuals.ESPSettings.TextColor,
-    Callback = function(v) WallHack.Visuals.ESPSettings.TextColor = v end
+VisualsTab:CreateColorPicker({
+    Name         = "Outline Color",
+    Color        = WallHack.Visuals.ESPSettings.OutlineColor,
+    Flag         = "TagsOutlineColor",
+    Callback     = function(v) WallHack.Visuals.ESPSettings.OutlineColor = v end
 })
 
-NameTagSection:AddColorpicker({
-    Name     = "Outline Color",
-    Default  = WallHack.Visuals.ESPSettings.OutlineColor,
-    Callback = function(v) WallHack.Visuals.ESPSettings.OutlineColor = v end
+local BoxSection = VisualsTab:CreateSection("Box ESP")
+
+VisualsTab:CreateToggle({
+    Name         = "Enable Boxes",
+    CurrentValue = WallHack.Visuals.BoxSettings.Enabled,
+    Flag         = "BoxEnabled",
+    Callback     = function(v) WallHack.Visuals.BoxSettings.Enabled = v end
 })
 
-local BoxSection = VisualsTab:AddSection({ Name = "Box ESP" })
-
-BoxSection:AddToggle({
-    Name     = "Enable Boxes",
-    Default  = WallHack.Visuals.BoxSettings.Enabled,
-    Callback = function(v) WallHack.Visuals.BoxSettings.Enabled = v end
-})
-
-BoxSection:AddDropdown({
-    Name     = "Box Type",
-    Default  = WallHack.Visuals.BoxSettings.Type == 1 and "3D" or "2D",
-    Options  = {"3D","2D"},
-    Callback = function(v) WallHack.Visuals.BoxSettings.Type = v == "3D" and 1 or 2 end
-})
-
-BoxSection:AddToggle({
-    Name     = "Filled",
-    Default  = WallHack.Visuals.BoxSettings.Filled,
-    Callback = function(v) WallHack.Visuals.BoxSettings.Filled = v end
-})
-
-BoxSection:AddSlider({
-    Name      = "Thickness",
-    Min       = 1,
-    Max       = 5,
-    Default   = WallHack.Visuals.BoxSettings.Thickness,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 1,
-    Callback  = function(v) WallHack.Visuals.BoxSettings.Thickness = v end
-})
-
-BoxSection:AddSlider({
-    Name      = "Transparency",
-    Min       = 0,
-    Max       = 1,
-    Default   = WallHack.Visuals.BoxSettings.Transparency,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 0.05,
-    Callback  = function(v) WallHack.Visuals.BoxSettings.Transparency = v end
-})
-
-BoxSection:AddSlider({
-    Name      = "Scale",
-    Min       = 1,
-    Max       = 5,
-    Default   = WallHack.Visuals.BoxSettings.Increase,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 0.1,
-    Callback  = function(v) WallHack.Visuals.BoxSettings.Increase = v end
-})
-
-BoxSection:AddColorpicker({
-    Name     = "Color",
-    Default  = WallHack.Visuals.BoxSettings.Color,
-    Callback = function(v) WallHack.Visuals.BoxSettings.Color = v end
-})
-
-local ChamsSection = VisualsTab:AddSection({ Name = "Chams" })
-
-ChamsSection:AddToggle({
-    Name     = "Enable Chams",
-    Default  = WallHack.Visuals.ChamsSettings.Enabled,
-    Callback = function(v) WallHack.Visuals.ChamsSettings.Enabled = v end
-})
-
-ChamsSection:AddToggle({
-    Name     = "Filled",
-    Default  = WallHack.Visuals.ChamsSettings.Filled,
-    Callback = function(v) WallHack.Visuals.ChamsSettings.Filled = v end
-})
-
-ChamsSection:AddToggle({
-    Name     = "Full Body (R15)",
-    Default  = WallHack.Visuals.ChamsSettings.EntireBody,
-    Callback = function(v) WallHack.Visuals.ChamsSettings.EntireBody = v end
-})
-
-ChamsSection:AddSlider({
-    Name      = "Transparency",
-    Min       = 0,
-    Max       = 1,
-    Default   = WallHack.Visuals.ChamsSettings.Transparency,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 0.05,
-    Callback  = function(v) WallHack.Visuals.ChamsSettings.Transparency = v end
-})
-
-ChamsSection:AddSlider({
-    Name      = "Outline Width",
-    Min       = 0,
-    Max       = 3,
-    Default   = WallHack.Visuals.ChamsSettings.Thickness,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 1,
-    Callback  = function(v) WallHack.Visuals.ChamsSettings.Thickness = v end
-})
-
-ChamsSection:AddColorpicker({
-    Name     = "Color",
-    Default  = WallHack.Visuals.ChamsSettings.Color,
-    Callback = function(v) WallHack.Visuals.ChamsSettings.Color = v end
-})
-
-local TracersSection = VisualsTab:AddSection({ Name = "Tracers" })
-
-TracersSection:AddToggle({
-    Name     = "Enable Tracers",
-    Default  = WallHack.Visuals.TracersSettings.Enabled,
-    Callback = function(v) WallHack.Visuals.TracersSettings.Enabled = v end
-})
-
-TracersSection:AddDropdown({
-    Name     = "Start Position",
-    Default  = TracersType[WallHack.Visuals.TracersSettings.Type],
-    Options  = TracersType,
-    Callback = function(v) WallHack.Visuals.TracersSettings.Type = tablefind(TracersType, v) end
-})
-
-TracersSection:AddSlider({
-    Name      = "Thickness",
-    Min       = 1,
-    Max       = 5,
-    Default   = WallHack.Visuals.TracersSettings.Thickness,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 1,
-    Callback  = function(v) WallHack.Visuals.TracersSettings.Thickness = v end
-})
-
-TracersSection:AddSlider({
-    Name      = "Transparency",
-    Min       = 0,
-    Max       = 1,
-    Default   = WallHack.Visuals.TracersSettings.Transparency,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 0.05,
-    Callback  = function(v) WallHack.Visuals.TracersSettings.Transparency = v end
-})
-
-TracersSection:AddColorpicker({
-    Name     = "Color",
-    Default  = WallHack.Visuals.TracersSettings.Color,
-    Callback = function(v) WallHack.Visuals.TracersSettings.Color = v end
-})
-
-local HeadDotSection = VisualsTab:AddSection({ Name = "Head Dots" })
-
-HeadDotSection:AddToggle({
-    Name     = "Enable Head Dots",
-    Default  = WallHack.Visuals.HeadDotSettings.Enabled,
-    Callback = function(v) WallHack.Visuals.HeadDotSettings.Enabled = v end
-})
-
-HeadDotSection:AddToggle({
-    Name     = "Filled",
-    Default  = WallHack.Visuals.HeadDotSettings.Filled,
-    Callback = function(v) WallHack.Visuals.HeadDotSettings.Filled = v end
-})
-
-HeadDotSection:AddSlider({
-    Name      = "Segments",
-    Min       = 3,
-    Max       = 60,
-    Default   = WallHack.Visuals.HeadDotSettings.Sides,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 1,
-    Callback  = function(v) WallHack.Visuals.HeadDotSettings.Sides = v end
-})
-
-HeadDotSection:AddSlider({
-    Name      = "Thickness",
-    Min       = 1,
-    Max       = 5,
-    Default   = WallHack.Visuals.HeadDotSettings.Thickness,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 1,
-    Callback  = function(v) WallHack.Visuals.HeadDotSettings.Thickness = v end
-})
-
-HeadDotSection:AddSlider({
-    Name      = "Transparency",
-    Min       = 0,
-    Max       = 1,
-    Default   = WallHack.Visuals.HeadDotSettings.Transparency,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 0.05,
-    Callback  = function(v) WallHack.Visuals.HeadDotSettings.Transparency = v end
-})
-
-HeadDotSection:AddColorpicker({
-    Name     = "Color",
-    Default  = WallHack.Visuals.HeadDotSettings.Color,
-    Callback = function(v) WallHack.Visuals.HeadDotSettings.Color = v end
-})
-
-local HealthBarSection = VisualsTab:AddSection({ Name = "Health Bars" })
-
-HealthBarSection:AddToggle({
-    Name     = "Enable Health Bars",
-    Default  = WallHack.Visuals.HealthBarSettings.Enabled,
-    Callback = function(v) WallHack.Visuals.HealthBarSettings.Enabled = v end
-})
-
-HealthBarSection:AddDropdown({
-    Name    = "Position",
-    Default = WallHack.Visuals.HealthBarSettings.Type == 1 and "Top"
-           or WallHack.Visuals.HealthBarSettings.Type == 2 and "Bottom"
-           or WallHack.Visuals.HealthBarSettings.Type == 3 and "Left" or "Right",
-    Options  = {"Top","Bottom","Left","Right"},
-    Callback = function(v)
-        WallHack.Visuals.HealthBarSettings.Type = v=="Top" and 1 or v=="Bottom" and 2 or v=="Left" and 3 or 4
+VisualsTab:CreateDropdown({
+    Name          = "Box Type",
+    Options       = {"3D", "2D"},
+    CurrentOption = {WallHack.Visuals.BoxSettings.Type == 1 and "3D" or "2D"},
+    Flag          = "BoxType",
+    Callback      = function(v)
+        local val = v[1] or v
+        WallHack.Visuals.BoxSettings.Type = val == "3D" and 1 or 2
     end
 })
 
-HealthBarSection:AddSlider({
-    Name      = "Width",
-    Min       = 2,
-    Max       = 10,
-    Default   = WallHack.Visuals.HealthBarSettings.Size,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 1,
-    Callback  = function(v) WallHack.Visuals.HealthBarSettings.Size = v end
+VisualsTab:CreateToggle({
+    Name         = "Filled",
+    CurrentValue = WallHack.Visuals.BoxSettings.Filled,
+    Flag         = "BoxFilled",
+    Callback     = function(v) WallHack.Visuals.BoxSettings.Filled = v end
 })
 
-HealthBarSection:AddSlider({
-    Name      = "Offset",
-    Min       = -30,
-    Max       = 30,
-    Default   = WallHack.Visuals.HealthBarSettings.Offset,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 1,
-    Callback  = function(v) WallHack.Visuals.HealthBarSettings.Offset = v end
+VisualsTab:CreateSlider({
+    Name         = "Thickness",
+    Range        = {1, 5},
+    Increment    = 1,
+    Suffix       = "px",
+    CurrentValue = WallHack.Visuals.BoxSettings.Thickness,
+    Flag         = "BoxThickness",
+    Callback     = function(v) WallHack.Visuals.BoxSettings.Thickness = v end
 })
 
-HealthBarSection:AddSlider({
-    Name      = "Transparency",
-    Min       = 0,
-    Max       = 1,
-    Default   = WallHack.Visuals.HealthBarSettings.Transparency,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 0.05,
-    Callback  = function(v) WallHack.Visuals.HealthBarSettings.Transparency = v end
+VisualsTab:CreateSlider({
+    Name         = "Transparency",
+    Range        = {0, 1},
+    Increment    = 0.05,
+    Suffix       = "",
+    CurrentValue = WallHack.Visuals.BoxSettings.Transparency,
+    Flag         = "BoxTransparency",
+    Callback     = function(v) WallHack.Visuals.BoxSettings.Transparency = v end
 })
 
-HealthBarSection:AddColorpicker({
-    Name     = "Outline Color",
-    Default  = WallHack.Visuals.HealthBarSettings.OutlineColor,
-    Callback = function(v) WallHack.Visuals.HealthBarSettings.OutlineColor = v end
+VisualsTab:CreateColorPicker({
+    Name         = "Box Color",
+    Color        = WallHack.Visuals.BoxSettings.Color,
+    Flag         = "BoxColor",
+    Callback     = function(v) WallHack.Visuals.BoxSettings.Color = v end
+})
+
+local ChamsSection = VisualsTab:CreateSection("Chams")
+
+VisualsTab:CreateToggle({
+    Name         = "Enable Chams",
+    CurrentValue = WallHack.Visuals.ChamsSettings.Enabled,
+    Flag         = "ChamsEnabled",
+    Callback     = function(v) WallHack.Visuals.ChamsSettings.Enabled = v end
+})
+
+VisualsTab:CreateToggle({
+    Name         = "Filled",
+    CurrentValue = WallHack.Visuals.ChamsSettings.Filled,
+    Flag         = "ChamsFilled",
+    Callback     = function(v) WallHack.Visuals.ChamsSettings.Filled = v end
+})
+
+VisualsTab:CreateToggle({
+    Name         = "Full Body (R15)",
+    CurrentValue = WallHack.Visuals.ChamsSettings.EntireBody,
+    Flag         = "ChamsFullBody",
+    Callback     = function(v) WallHack.Visuals.ChamsSettings.EntireBody = v end
+})
+
+VisualsTab:CreateSlider({
+    Name         = "Transparency",
+    Range        = {0, 1},
+    Increment    = 0.05,
+    Suffix       = "",
+    CurrentValue = WallHack.Visuals.ChamsSettings.Transparency,
+    Flag         = "ChamsTransparency",
+    Callback     = function(v) WallHack.Visuals.ChamsSettings.Transparency = v end
+})
+
+VisualsTab:CreateColorPicker({
+    Name         = "Color",
+    Color        = WallHack.Visuals.ChamsSettings.Color,
+    Flag         = "ChamsColor",
+    Callback     = function(v) WallHack.Visuals.ChamsSettings.Color = v end
+})
+
+local TracersSection = VisualsTab:CreateSection("Tracers")
+
+VisualsTab:CreateToggle({
+    Name         = "Enable Tracers",
+    CurrentValue = WallHack.Visuals.TracersSettings.Enabled,
+    Flag         = "TracersEnabled",
+    Callback     = function(v) WallHack.Visuals.TracersSettings.Enabled = v end
+})
+
+VisualsTab:CreateDropdown({
+    Name          = "Start Position",
+    Options       = TracersType,
+    CurrentOption = {TracersType[WallHack.Visuals.TracersSettings.Type]},
+    Flag          = "TracersType",
+    Callback      = function(v)
+        local val = v[1] or v
+        WallHack.Visuals.TracersSettings.Type = tablefind(TracersType, val)
+    end
+})
+
+VisualsTab:CreateSlider({
+    Name         = "Thickness",
+    Range        = {1, 5},
+    Increment    = 1,
+    Suffix       = "px",
+    CurrentValue = WallHack.Visuals.TracersSettings.Thickness,
+    Flag         = "TracersThickness",
+    Callback     = function(v) WallHack.Visuals.TracersSettings.Thickness = v end
+})
+
+VisualsTab:CreateColorPicker({
+    Name         = "Color",
+    Color        = WallHack.Visuals.TracersSettings.Color,
+    Flag         = "TracersColor",
+    Callback     = function(v) WallHack.Visuals.TracersSettings.Color = v end
+})
+
+local HeadDotSection = VisualsTab:CreateSection("Head Dots")
+
+VisualsTab:CreateToggle({
+    Name         = "Enable Head Dots",
+    CurrentValue = WallHack.Visuals.HeadDotSettings.Enabled,
+    Flag         = "HDEnabled",
+    Callback     = function(v) WallHack.Visuals.HeadDotSettings.Enabled = v end
+})
+
+VisualsTab:CreateToggle({
+    Name         = "Filled",
+    CurrentValue = WallHack.Visuals.HeadDotSettings.Filled,
+    Flag         = "HDFilled",
+    Callback     = function(v) WallHack.Visuals.HeadDotSettings.Filled = v end
+})
+
+VisualsTab:CreateSlider({
+    Name         = "Segments",
+    Range        = {3, 60},
+    Increment    = 1,
+    Suffix       = "",
+    CurrentValue = WallHack.Visuals.HeadDotSettings.Sides,
+    Flag         = "HDSides",
+    Callback     = function(v) WallHack.Visuals.HeadDotSettings.Sides = v end
+})
+
+VisualsTab:CreateSlider({
+    Name         = "Thickness",
+    Range        = {1, 5},
+    Increment    = 1,
+    Suffix       = "px",
+    CurrentValue = WallHack.Visuals.HeadDotSettings.Thickness,
+    Flag         = "HDThickness",
+    Callback     = function(v) WallHack.Visuals.HeadDotSettings.Thickness = v end
+})
+
+VisualsTab:CreateColorPicker({
+    Name         = "Color",
+    Color        = WallHack.Visuals.HeadDotSettings.Color,
+    Flag         = "HDColor",
+    Callback     = function(v) WallHack.Visuals.HeadDotSettings.Color = v end
+})
+
+local HealthBarSection = VisualsTab:CreateSection("Health Bars")
+
+VisualsTab:CreateToggle({
+    Name         = "Enable Health Bars",
+    CurrentValue = WallHack.Visuals.HealthBarSettings.Enabled,
+    Flag         = "HBEnabled",
+    Callback     = function(v) WallHack.Visuals.HealthBarSettings.Enabled = v end
+})
+
+VisualsTab:CreateDropdown({
+    Name          = "Position",
+    Options       = {"Top","Bottom","Left","Right"},
+    CurrentOption = {WallHack.Visuals.HealthBarSettings.Type == 1 and "Top"
+                  or WallHack.Visuals.HealthBarSettings.Type == 2 and "Bottom"
+                  or WallHack.Visuals.HealthBarSettings.Type == 3 and "Left" or "Right"},
+    Flag          = "HBType",
+    Callback      = function(v)
+        local val = v[1] or v
+        WallHack.Visuals.HealthBarSettings.Type = val=="Top" and 1 or val=="Bottom" and 2 or val=="Left" and 3 or 4
+    end
+})
+
+VisualsTab:CreateSlider({
+    Name         = "Width",
+    Range        = {2, 10},
+    Increment    = 1,
+    Suffix       = "px",
+    CurrentValue = WallHack.Visuals.HealthBarSettings.Size,
+    Flag         = "HBSize",
+    Callback     = function(v) WallHack.Visuals.HealthBarSettings.Size = v end
+})
+
+VisualsTab:CreateSlider({
+    Name         = "Offset",
+    Range        = {-30, 30},
+    Increment    = 1,
+    Suffix       = "px",
+    CurrentValue = WallHack.Visuals.HealthBarSettings.Offset,
+    Flag         = "HBOffset",
+    Callback     = function(v) WallHack.Visuals.HealthBarSettings.Offset = v end
+})
+
+VisualsTab:CreateColorPicker({
+    Name         = "Outline Color",
+    Color        = WallHack.Visuals.HealthBarSettings.OutlineColor,
+    Flag         = "HBOutlineColor",
+    Callback     = function(v) WallHack.Visuals.HealthBarSettings.OutlineColor = v end
 })
 
 -- ══════════════════════════════════════════════════
---  CROSSHAIR TAB
+--  CROSSHAIR
 -- ══════════════════════════════════════════════════
 
-local XhairSection = CrosshairTab:AddSection({ Name = "Crosshair" })
+local XhairSection = CrosshairTab:CreateSection("Crosshair")
 
-XhairSection:AddToggle({
-    Name     = "System Cursor",
-    Default  = UserInputService.MouseIconEnabled,
-    Callback = function(v) UserInputService.MouseIconEnabled = v end
+CrosshairTab:CreateToggle({
+    Name         = "System Cursor",
+    CurrentValue = UserInputService.MouseIconEnabled,
+    Flag         = "SysCursor",
+    Callback     = function(v) UserInputService.MouseIconEnabled = v end
 })
 
-XhairSection:AddToggle({
-    Name     = "Custom Crosshair",
-    Default  = WallHack.Crosshair.Settings.Enabled,
-    Callback = function(v) WallHack.Crosshair.Settings.Enabled = v end
+CrosshairTab:CreateToggle({
+    Name         = "Custom Crosshair",
+    CurrentValue = WallHack.Crosshair.Settings.Enabled,
+    Flag         = "XhairEnabled",
+    Callback     = function(v) WallHack.Crosshair.Settings.Enabled = v end
 })
 
-XhairSection:AddDropdown({
-    Name     = "Position",
-    Default  = WallHack.Crosshair.Settings.Type == 1 and "Mouse" or "Center",
-    Options  = {"Mouse","Center"},
-    Callback = function(v) WallHack.Crosshair.Settings.Type = v == "Mouse" and 1 or 2 end
+CrosshairTab:CreateDropdown({
+    Name          = "Position",
+    Options       = {"Mouse","Center"},
+    CurrentOption = {WallHack.Crosshair.Settings.Type == 1 and "Mouse" or "Center"},
+    Flag          = "XhairType",
+    Callback      = function(v)
+        local val = v[1] or v
+        WallHack.Crosshair.Settings.Type = val == "Mouse" and 1 or 2
+    end
 })
 
-XhairSection:AddSlider({
-    Name      = "Size",
-    Min       = 4,
-    Max       = 40,
-    Default   = WallHack.Crosshair.Settings.Size,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 1,
-    Callback  = function(v) WallHack.Crosshair.Settings.Size = v end
+CrosshairTab:CreateSlider({
+    Name         = "Size",
+    Range        = {4, 40},
+    Increment    = 1,
+    Suffix       = "px",
+    CurrentValue = WallHack.Crosshair.Settings.Size,
+    Flag         = "XhairSize",
+    Callback     = function(v) WallHack.Crosshair.Settings.Size = v end
 })
 
-XhairSection:AddSlider({
-    Name      = "Thickness",
-    Min       = 1,
-    Max       = 5,
-    Default   = WallHack.Crosshair.Settings.Thickness,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 1,
-    Callback  = function(v) WallHack.Crosshair.Settings.Thickness = v end
+CrosshairTab:CreateSlider({
+    Name         = "Thickness",
+    Range        = {1, 5},
+    Increment    = 1,
+    Suffix       = "px",
+    CurrentValue = WallHack.Crosshair.Settings.Thickness,
+    Flag         = "XhairThickness",
+    Callback     = function(v) WallHack.Crosshair.Settings.Thickness = v end
 })
 
-XhairSection:AddSlider({
-    Name      = "Gap",
-    Min       = 0,
-    Max       = 20,
-    Default   = WallHack.Crosshair.Settings.GapSize,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 1,
-    Callback  = function(v) WallHack.Crosshair.Settings.GapSize = v end
+CrosshairTab:CreateSlider({
+    Name         = "Gap",
+    Range        = {0, 20},
+    Increment    = 1,
+    Suffix       = "px",
+    CurrentValue = WallHack.Crosshair.Settings.GapSize,
+    Flag         = "XhairGap",
+    Callback     = function(v) WallHack.Crosshair.Settings.GapSize = v end
 })
 
-XhairSection:AddSlider({
-    Name      = "Rotation",
-    Min       = -180,
-    Max       = 180,
-    Default   = WallHack.Crosshair.Settings.Rotation,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 1,
-    Callback  = function(v) WallHack.Crosshair.Settings.Rotation = v end
+CrosshairTab:CreateSlider({
+    Name         = "Rotation",
+    Range        = {-180, 180},
+    Increment    = 1,
+    Suffix       = "°",
+    CurrentValue = WallHack.Crosshair.Settings.Rotation,
+    Flag         = "XhairRotation",
+    Callback     = function(v) WallHack.Crosshair.Settings.Rotation = v end
 })
 
-XhairSection:AddSlider({
-    Name      = "Transparency",
-    Min       = 0,
-    Max       = 1,
-    Default   = WallHack.Crosshair.Settings.Transparency,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 0.05,
-    Callback  = function(v) WallHack.Crosshair.Settings.Transparency = v end
+CrosshairTab:CreateColorPicker({
+    Name         = "Color",
+    Color        = WallHack.Crosshair.Settings.Color,
+    Flag         = "XhairColor",
+    Callback     = function(v) WallHack.Crosshair.Settings.Color = v end
 })
 
-XhairSection:AddColorpicker({
-    Name     = "Color",
-    Default  = WallHack.Crosshair.Settings.Color,
-    Callback = function(v) WallHack.Crosshair.Settings.Color = v end
+local DotSection = CrosshairTab:CreateSection("Center Dot")
+
+CrosshairTab:CreateToggle({
+    Name         = "Enable Dot",
+    CurrentValue = WallHack.Crosshair.Settings.CenterDot,
+    Flag         = "DotEnabled",
+    Callback     = function(v) WallHack.Crosshair.Settings.CenterDot = v end
 })
 
-local DotSection = CrosshairTab:AddSection({ Name = "Center Dot" })
-
-DotSection:AddToggle({
-    Name     = "Enable Dot",
-    Default  = WallHack.Crosshair.Settings.CenterDot,
-    Callback = function(v) WallHack.Crosshair.Settings.CenterDot = v end
+CrosshairTab:CreateToggle({
+    Name         = "Filled",
+    CurrentValue = WallHack.Crosshair.Settings.CenterDotFilled,
+    Flag         = "DotFilled",
+    Callback     = function(v) WallHack.Crosshair.Settings.CenterDotFilled = v end
 })
 
-DotSection:AddToggle({
-    Name     = "Filled",
-    Default  = WallHack.Crosshair.Settings.CenterDotFilled,
-    Callback = function(v) WallHack.Crosshair.Settings.CenterDotFilled = v end
+CrosshairTab:CreateSlider({
+    Name         = "Size",
+    Range        = {1, 10},
+    Increment    = 1,
+    Suffix       = "px",
+    CurrentValue = WallHack.Crosshair.Settings.CenterDotSize,
+    Flag         = "DotSize",
+    Callback     = function(v) WallHack.Crosshair.Settings.CenterDotSize = v end
 })
 
-DotSection:AddSlider({
-    Name      = "Size",
-    Min       = 1,
-    Max       = 10,
-    Default   = WallHack.Crosshair.Settings.CenterDotSize,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 1,
-    Callback  = function(v) WallHack.Crosshair.Settings.CenterDotSize = v end
-})
-
-DotSection:AddSlider({
-    Name      = "Transparency",
-    Min       = 0,
-    Max       = 1,
-    Default   = WallHack.Crosshair.Settings.CenterDotTransparency,
-    Color     = Color3.fromRGB(255, 51, 17),
-    Increment = 0.05,
-    Callback  = function(v) WallHack.Crosshair.Settings.CenterDotTransparency = v end
-})
-
-DotSection:AddColorpicker({
-    Name     = "Color",
-    Default  = WallHack.Crosshair.Settings.CenterDotColor,
-    Callback = function(v) WallHack.Crosshair.Settings.CenterDotColor = v end
+CrosshairTab:CreateColorPicker({
+    Name         = "Color",
+    Color        = WallHack.Crosshair.Settings.CenterDotColor,
+    Flag         = "DotColor",
+    Callback     = function(v) WallHack.Crosshair.Settings.CenterDotColor = v end
 })
 
 -- ══════════════════════════════════════════════════
---  CONFIG TAB
+--  CONFIG
 -- ══════════════════════════════════════════════════
 
-local ConfigSection = ConfigTab:AddSection({ Name = "Save / Load" })
+local ConfigSection = ConfigTab:CreateSection("Save / Load")
 
 local AutoSaveEnabled = false
 
@@ -909,28 +884,29 @@ task.spawn(function()
     end
 end)
 
-ConfigSection:AddToggle({
-    Name     = "Auto-Save (every 5s)",
-    Default  = false,
-    Callback = function(v)
+ConfigTab:CreateToggle({
+    Name         = "Auto-Save (every 5s)",
+    CurrentValue = false,
+    Flag         = "AutoSave",
+    Callback     = function(v)
         AutoSaveEnabled = v
         if v then SaveConfig() end
     end
 })
 
-ConfigSection:AddButton({
+ConfigTab:CreateButton({
     Name     = "Save Config",
     Callback = function() SaveConfig() end
 })
 
-ConfigSection:AddButton({
+ConfigTab:CreateButton({
     Name     = "Load Config",
     Callback = function() LoadConfig() end
 })
 
-local ControlSection = ConfigTab:AddSection({ Name = "Controls" })
+local ControlSection = ConfigTab:CreateSection("Controls")
 
-ControlSection:AddButton({
+ConfigTab:CreateButton({
     Name     = "Reset All Settings",
     Callback = function()
         Aimbot.Functions:ResetSettings()
@@ -938,7 +914,7 @@ ControlSection:AddButton({
     end
 })
 
-ControlSection:AddButton({
+ConfigTab:CreateButton({
     Name     = "Restart Modules",
     Callback = function()
         Aimbot.Functions:Restart()
@@ -946,14 +922,12 @@ ControlSection:AddButton({
     end
 })
 
-ControlSection:AddButton({
+ConfigTab:CreateButton({
     Name     = "Unload",
     Callback = function()
-        OrionLib:Destroy()
+        Rayfield:Destroy()
         Aimbot.Functions:Exit()
         WallHack.Functions:Exit()
         getgenv().AirHub = nil
     end
 })
-
-OrionLib:Init()
