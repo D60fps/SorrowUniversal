@@ -27,8 +27,8 @@ getgenv().AirHub.Aimbot = {
 		TeamCheck              = false,
 		AliveCheck             = true,
 		WallCheck              = false,
-		Sensitivity            = 0,             -- Tween duration (seconds) before fully locking
-		ThirdPerson            = false,          -- Use mousemoverel for third-person support
+		Sensitivity            = 0,
+		ThirdPerson            = false,
 		ThirdPersonSensitivity = 3,
 		TriggerKey             = "MouseButton2",
 		Toggle                 = false,
@@ -36,8 +36,8 @@ getgenv().AirHub.Aimbot = {
 	},
 
 	FOVSettings = {
-		Enabled      = true,
-		Visible      = true,
+		Enabled      = false,   -- master on/off for the FOV system
+		Visible      = false,   -- whether the circle is drawn on screen
 		Amount       = 90,
 		Color        = Color3fromRGB(255, 255, 255),
 		LockedColor  = Color3fromRGB(255, 70, 70),
@@ -47,27 +47,24 @@ getgenv().AirHub.Aimbot = {
 		Filled       = false
 	},
 
-	-- Silent Aim
-	-- Hooks Camera:ScreenPointToRay / ViewportPointToRay — the two methods most
-	-- projectile systems use to turn screen coords into a world ray.  We replace
-	-- the returned Ray with one that points at the closest valid target instead of
-	-- the real crosshair position.  The camera never moves, so locally everything
-	-- looks completely normal while the bullet flies toward the target.
 	SilentAim = {
 		Enabled    = false,
 		TeamCheck  = false,
 		AliveCheck = true,
 		WallCheck  = false,
 		LockPart   = "Head",
-		UseFOV     = true,  -- Only redirect shots fired from within the FOV radius
-		FOVAmount  = 180,   -- Independent pixel-radius for silent-aim FOV
-		Prediction = 0,     -- Velocity lead multiplier (0 = disabled)
+		UseFOV     = true,
+		FOVAmount  = 180,
+		Prediction = 0,
 	},
 
 	FOVCircle = Drawingnew("Circle")
 }
 
 local Environment = getgenv().AirHub.Aimbot
+
+-- Make sure circle starts hidden
+Environment.FOVCircle.Visible = false
 
 --// ─────────────────────────────────────────────────────────────────────────
 --// Core Functions
@@ -79,7 +76,6 @@ end
 
 local function CancelLock()
 	Environment.Locked = nil
-	RequiredDistance = (Environment.FOVSettings.Enabled and Environment.FOVSettings.Amount or 2000)
 	Environment.FOVCircle.Color = Environment.FOVSettings.Color
 	UserInputService.MouseDeltaSensitivity = OriginalSensitivity
 
@@ -128,8 +124,6 @@ local SAHooked   = false
 local SA_orig_SP = nil
 local SA_orig_VP = nil
 
--- Find the closest valid player for silent aim and return the world position
--- we want the bullet to travel toward.
 local function GetSilentTarget()
 	local SA    = Environment.SilentAim
 	local mouse = UserInputService:GetMouseLocation()
@@ -165,7 +159,6 @@ local function GetSilentTarget()
 	local pos  = bestTarget.Character[SA.LockPart].Position
 	local pred = SA.Prediction
 
-	-- Velocity prediction: lead the target by its current velocity * multiplier
 	if pred > 0 then
 		local hrp = bestTarget.Character:FindFirstChild("HumanoidRootPart")
 		if hrp then
@@ -176,7 +169,6 @@ local function GetSilentTarget()
 	return pos
 end
 
--- Build a Ray from the camera that points at a world-space position.
 local function MakeRayTowards(worldPos)
 	local origin    = Camera.CFrame.Position
 	local direction = (worldPos - origin).Unit * 5000
@@ -222,20 +214,22 @@ end
 local function Load()
 	OriginalSensitivity = UserInputService.MouseDeltaSensitivity
 
-	-- Hooks gate on SilentAim.Enabled so they're safe to install immediately
 	InstallSilentAimHooks()
 
 	ServiceConnections.RenderSteppedConnection = RunService.RenderStepped:Connect(function()
-		-- FOV Circle
-		if Environment.FOVSettings.Enabled and Environment.Settings.Enabled then
-			Environment.FOVCircle.Radius       = Environment.FOVSettings.Amount
-			Environment.FOVCircle.Thickness    = Environment.FOVSettings.Thickness
-			Environment.FOVCircle.Filled       = Environment.FOVSettings.Filled
-			Environment.FOVCircle.NumSides     = Environment.FOVSettings.Sides
-			Environment.FOVCircle.Color        = Environment.FOVSettings.Color
-			Environment.FOVCircle.Transparency = Environment.FOVSettings.Transparency
-			Environment.FOVCircle.Visible      = Environment.FOVSettings.Visible
+		local AF = Environment.FOVSettings
+
+		-- FOV Circle: only show when both Enabled AND Visible are true
+		if AF.Enabled and AF.Visible then
+			Environment.FOVCircle.Radius       = AF.Amount
+			Environment.FOVCircle.Thickness    = AF.Thickness
+			Environment.FOVCircle.Filled       = AF.Filled
+			Environment.FOVCircle.NumSides     = AF.Sides
+			Environment.FOVCircle.Transparency = AF.Transparency
 			Environment.FOVCircle.Position     = UserInputService:GetMouseLocation()
+			-- Color: locked = locked color, otherwise normal color
+			Environment.FOVCircle.Color   = Environment.Locked and AF.LockedColor or AF.Color
+			Environment.FOVCircle.Visible = true
 		else
 			Environment.FOVCircle.Visible = false
 		end
@@ -264,8 +258,6 @@ local function Load()
 
 					UserInputService.MouseDeltaSensitivity = 0
 				end
-
-				Environment.FOVCircle.Color = Environment.FOVSettings.LockedColor
 			end
 		end
 	end)
@@ -363,8 +355,8 @@ function Environment.Functions:ResetSettings()
 	}
 
 	Environment.FOVSettings = {
-		Enabled      = true,
-		Visible      = true,
+		Enabled      = false,
+		Visible      = false,
 		Amount       = 90,
 		Color        = Color3fromRGB(255, 255, 255),
 		LockedColor  = Color3fromRGB(255, 70, 70),
