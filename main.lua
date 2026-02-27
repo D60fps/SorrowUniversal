@@ -1,4 +1,4 @@
-local loadstring, getgenv, setclipboard, tablefind, UserInputService = loadstring, getgenv, setclipboard, table.find, game:GetService("UserInputService")
+local getgenv, setclipboard, tablefind, UserInputService = getgenv, setclipboard, table.find, game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
 
 --// Loaded check
@@ -1189,3 +1189,6 @@ ConfigControl:AddButton({
     Name     = "UNLOAD",
     Callback = Library.Unload
 })
+
+-- Open the GUI
+Library:Open()
