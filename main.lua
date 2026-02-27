@@ -351,13 +351,13 @@ AimLeft:AddSlider("Aim3PSens", {
 -- FOV --
 
 AimRight:AddToggle("FOVEnabled", {
-    Text    = "Enable FOV",
+    Text    = "Restrict Aim to FOV",
     Default = Aimbot.FOVSettings.Enabled,
     Callback = function(v) Aimbot.FOVSettings.Enabled = v end,
 })
 
 AimRight:AddToggle("FOVVisible", {
-    Text    = "Show Circle",
+    Text    = "Show FOV Circle",
     Default = Aimbot.FOVSettings.Visible,
     Callback = function(v) Aimbot.FOVSettings.Visible = v end,
 })
