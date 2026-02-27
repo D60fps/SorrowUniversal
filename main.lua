@@ -36,6 +36,16 @@ if not WallHack then warn("[AirHub] WallHack is nil - check module URL") return 
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
+--// Hood Modded blocks CoreGui — move Rayfield's GUI to PlayerGui
+task.defer(function()
+    local playerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+    for _, gui in ipairs(game:GetService("CoreGui"):GetChildren()) do
+        if gui.Name == "Rayfield" then
+            gui.Parent = playerGui
+        end
+    end
+end)
+
 --// Variables
 
 local Parts       = {"Head","HumanoidRootPart","Torso","Left Arm","Right Arm","Left Leg","Right Leg","LeftHand","RightHand","LeftLowerArm","RightLowerArm","LeftUpperArm","RightUpperArm","LeftFoot","LeftLowerLeg","UpperTorso","LeftUpperLeg","RightFoot","RightLowerLeg","LowerTorso","RightUpperLeg"}
