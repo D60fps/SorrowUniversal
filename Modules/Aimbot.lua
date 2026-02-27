@@ -36,8 +36,8 @@ getgenv().AirHub.Aimbot = {
 	},
 
 	FOVSettings = {
-		Enabled      = false,   -- master on/off for the FOV system
-		Visible      = false,   -- whether the circle is drawn on screen
+		Enabled      = false,   -- restricts aimbot targeting to within this radius
+		Visible      = false,   -- draws the circle on screen (independent)
 		Amount       = 90,
 		Color        = Color3fromRGB(255, 255, 255),
 		LockedColor  = Color3fromRGB(255, 70, 70),
@@ -219,17 +219,16 @@ local function Load()
 	ServiceConnections.RenderSteppedConnection = RunService.RenderStepped:Connect(function()
 		local AF = Environment.FOVSettings
 
-		-- FOV Circle: only show when both Enabled AND Visible are true
-		if AF.Enabled and AF.Visible then
+		-- FOV Circle: show whenever Visible is true
+		if AF.Visible then
 			Environment.FOVCircle.Radius       = AF.Amount
 			Environment.FOVCircle.Thickness    = AF.Thickness
 			Environment.FOVCircle.Filled       = AF.Filled
 			Environment.FOVCircle.NumSides     = AF.Sides
 			Environment.FOVCircle.Transparency = AF.Transparency
 			Environment.FOVCircle.Position     = UserInputService:GetMouseLocation()
-			-- Color: locked = locked color, otherwise normal color
-			Environment.FOVCircle.Color   = Environment.Locked and AF.LockedColor or AF.Color
-			Environment.FOVCircle.Visible = true
+			Environment.FOVCircle.Color        = Environment.Locked and AF.LockedColor or AF.Color
+			Environment.FOVCircle.Visible      = true
 		else
 			Environment.FOVCircle.Visible = false
 		end
