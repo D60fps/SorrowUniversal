@@ -920,38 +920,34 @@ CRight:AddButton({
 CRight:AddButton({
     Text = "Restart Modules",
     Func = function()
-        -- Exit old instances
-        pcall(function() Aimbot.Functions:Exit() end)
-        pcall(function() WallHack.Functions:Exit() end)
-
-        -- Clear so modules re-register
-        getgenv().AirHub.Aimbot   = nil
-        getgenv().AirHub.WallHack = nil
-
-        -- Re-load
-        safeLoad(MODULE_URLS.Aimbot,   "Aimbot")
-        safeLoad(MODULE_URLS.WallHack, "WallHack")
-
-        -- Update references
-        Aimbot   = getgenv().AirHub.Aimbot
-        WallHack = getgenv().AirHub.WallHack
-
-        if Aimbot and WallHack then
-            Library:Notify("Modules restarted.", 3)
-        else
-            Library:Notify("Restart failed – check console.", 5)
-        end
+        task.spawn(function()
+            pcall(function() Aimbot.Functions:Exit() end)
+            pcall(function() WallHack.Functions:Exit() end)
+            getgenv().AirHub.Aimbot   = nil
+            getgenv().AirHub.WallHack = nil
+            safeLoad(MODULE_URLS.Aimbot,   "Aimbot")
+            safeLoad(MODULE_URLS.WallHack, "WallHack")
+            Aimbot   = getgenv().AirHub.Aimbot
+            WallHack = getgenv().AirHub.WallHack
+            if Aimbot and WallHack then
+                Library:Notify("Modules restarted.", 3)
+            else
+                Library:Notify("Restart failed – check console.", 5)
+            end
+        end)
     end,
 })
 
 CRight:AddButton({
     Text = "Unload",
     Func = function()
-        pcall(function() Aimbot.Functions:Exit() end)
-        pcall(function() WallHack.Functions:Exit() end)
-        Library:Destroy()
-        getgenv().AirHub         = nil
-        getgenv().AirHubV2Loaded = nil
+        task.defer(function()
+            pcall(function() Aimbot.Functions:Exit() end)
+            pcall(function() WallHack.Functions:Exit() end)
+            pcall(function() Library:Destroy() end)
+            getgenv().AirHub         = nil
+            getgenv().AirHubV2Loaded = nil
+        end)
     end,
 })
 
