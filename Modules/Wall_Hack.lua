@@ -168,9 +168,11 @@ local function Wrap(Player)
     Environment.WrappedPlayers[#Environment.WrappedPlayers+1] = Entry
 
     Entry.Connections.CharAdded = Player.CharacterAdded:Connect(function(char)
-        rigType   = DetectRig(char)
-        oldEntire = Environment.Visuals.ChamsSettings.EntireBody
-        BuildChams(Chams, rigType, oldEntire)
+        task.defer(function()
+            rigType   = DetectRig(char)
+            oldEntire = Environment.Visuals.ChamsSettings.EntireBody
+            BuildChams(Chams, rigType, oldEntire)
+        end)
     end)
 
     local function HideAll()
