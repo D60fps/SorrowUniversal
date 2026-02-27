@@ -226,20 +226,23 @@ UserInputService.TextBoxFocusReleased:Connect(function()  BindingTyping = false 
 
 local function StartBind(btn, labelPrefix, onDone)
     btn:SetText(labelPrefix .. "[ PRESS A KEY ]")
-    local conn
-    conn = UserInputService.InputBegan:Connect(function(input, gpe)
-        if gpe then return end
-        local keyName
-        if input.KeyCode ~= Enum.KeyCode.Unknown then
-            keyName = input.KeyCode.Name
-        else
-            keyName = input.UserInputType.Name
-        end
-        -- Ignore modifier-only presses
-        if keyName == "Unknown" then return end
-        conn:Disconnect()
-        onDone(keyName)
-        btn:SetText(labelPrefix .. keyName)
+    -- Defer so the click that opened the bind doesn't immediately count as the key
+    task.delay(0.1, function()
+        local conn
+        conn = UserInputService.InputBegan:Connect(function(input, gpe)
+            -- Accept keyboard keys or mouse buttons; ignore game-processed GUI events
+            local keyName
+            if input.KeyCode ~= Enum.KeyCode.Unknown then
+                keyName = input.KeyCode.Name
+            elseif input.UserInputType ~= Enum.UserInputType.Unknown then
+                keyName = input.UserInputType.Name
+            else
+                return
+            end
+            conn:Disconnect()
+            onDone(keyName)
+            btn:SetText(labelPrefix .. keyName)
+        end)
     end)
 end
 
