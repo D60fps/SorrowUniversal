@@ -249,9 +249,6 @@ local function Wrap(Player)
 
     Environment.WrappedPlayers[#Environment.WrappedPlayers + 1] = Value
 
-    -- Rig assignment
-    AssignRigType(Player)
-
     -- Build chams rig
     local function BuildRig()
         for _, v in next, Value.Chams do
@@ -274,8 +271,13 @@ local function Wrap(Player)
         end
     end
 
-    BuildRig()
     local oldEntireBody = Environment.Visuals.ChamsSettings.EntireBody
+
+    -- AssignRigType yields (repeat wait), must run in a separate thread
+    task.spawn(function()
+        AssignRigType(Player)
+        BuildRig()
+    end)
 
     local function HideAll()
         ESP.Visible       = false
