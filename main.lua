@@ -1,4 +1,4 @@
-local getgenv, setclipboard, tablefind, UserInputService = getgenv, setclipboard, table.find, game:GetService("UserInputService")
+local loadstring, getgenv, setclipboard, tablefind, UserInputService = loadstring, getgenv, setclipboard, table.find, game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
 
 --// Loaded check
@@ -30,8 +30,12 @@ local Parts, Fonts, TracersType = {"Head","HumanoidRootPart","Torso","Left Arm",
 local CONFIG_FOLDER = "AirHub"
 local CONFIG_FILE   = CONFIG_FOLDER .. "/config.json"
 
+-- Check if filesystem APIs are available on this executor
+local FS_SUPPORTED = (typeof(isfolder) == "function" and typeof(makefolder) == "function" and typeof(readfile) == "function" and typeof(writefile) == "function" and typeof(isfile) == "function")
+
 -- Ensure folder exists safely
 local function EnsureFolder()
+    if not FS_SUPPORTED then return end
     if not isfolder(CONFIG_FOLDER) then
         makefolder(CONFIG_FOLDER)
     end
@@ -272,6 +276,7 @@ end
 
 -- Public save
 local function SaveConfig()
+    if not FS_SUPPORTED then warn("[AirHub] Filesystem not supported on this executor - config will not save.") return end
     local ok, err = pcall(function()
         EnsureFolder()
         local snapshot = BuildSnapshot()
@@ -285,6 +290,7 @@ end
 
 -- Public load — applies settings then calls Library.ResetAll() so the UI reflects them
 local function LoadConfig()
+    if not FS_SUPPORTED then return end
     local ok, err = pcall(function()
         if not isfile(CONFIG_FILE) then
             warn("[AirHub] No config found at " .. CONFIG_FILE)
@@ -303,7 +309,7 @@ end
 
 -- Auto-load on startup if a config already exists
 task.defer(function()
-    if isfolder(CONFIG_FOLDER) and isfile(CONFIG_FILE) then
+    if FS_SUPPORTED and isfolder(CONFIG_FOLDER) and isfile(CONFIG_FILE) then
         LoadConfig()
     end
 end)
@@ -1177,6 +1183,3 @@ ConfigControl:AddButton({
     Name     = "UNLOAD",
     Callback = Library.Unload
 })
-
--- Open the GUI
-Library:Open()
