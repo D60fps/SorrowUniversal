@@ -12,21 +12,9 @@ end
 getgenv().AirHub = {}
 
 --// Load Modules
--- Loads from AirHub/ folder in your executor workspace.
--- Place Aimbot.lua and Wall_Hack.lua in the AirHub folder alongside config.json.
 
-if not isfolder("AirHub") then makefolder("AirHub") end
-
-local function LoadModule(filename)
-    local path = "AirHub/" .. filename
-    if not isfile(path) then
-        error("[AirHub] Missing module: " .. path .. "\nMake sure Aimbot.lua and Wall_Hack.lua are inside your AirHub folder.", 2)
-    end
-    loadstring(readfile(path))()
-end
-
-LoadModule("Aimbot.lua")
-LoadModule("Wall_Hack.lua")
+loadstring(game:HttpGet("https://raw.githubusercontent.com/D60fps/SorrowUniversal/main/Modules/Aimbot.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/D60fps/SorrowUniversal/main/Modules/Wall%20Hack.lua"))()
 
 --// Variables
 
