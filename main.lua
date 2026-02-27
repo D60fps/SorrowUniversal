@@ -4,7 +4,7 @@ local HttpService = game:GetService("HttpService")
 
 --// Loaded check
 
-if AirHub or AirHubV2Loaded then
+if getgenv().AirHub or getgenv().AirHubV2Loaded then
     return
 end
 
@@ -12,15 +12,23 @@ end
 
 getgenv().AirHub = {}
 
---// Load Modules
-
-loadstring(game:HttpGet("https://raw.githubusercontent.com/D60fps/SorrowUniversal/main/Modules/Aimbot.lua"))()
-loadstring(game:HttpGet("https://raw.githubusercontent.com/D60fps/SorrowUniversal/main/Modules/Wall%20Hack.lua"))()
-
---// Variables
+--// Load Library first so GUI can appear even if a module errors
 
 local Library = loadstring(game:GetObjects("rbxassetid://7657867786")[1].Source)()
-local Aimbot, WallHack = getgenv().AirHub.Aimbot, getgenv().AirHub.WallHack
+
+--// Load Modules (guarded so a network/script error doesn't silently kill the GUI)
+
+local ok1, err1 = pcall(function()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/D60fps/SorrowUniversal/main/Modules/Aimbot.lua"))()
+end)
+if not ok1 then warn("[AirHub] Aimbot module failed to load: " .. tostring(err1)) end
+
+local ok2, err2 = pcall(function()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/D60fps/SorrowUniversal/main/Modules/Wall%20Hack.lua"))()
+end)
+if not ok2 then warn("[AirHub] WallHack module failed to load: " .. tostring(err2)) end
+local Aimbot   = getgenv().AirHub.Aimbot   or error("[AirHub] Aimbot module did not initialise — check executor console for errors.")
+local WallHack = getgenv().AirHub.WallHack or error("[AirHub] WallHack module did not initialise — check executor console for errors.")
 local Parts, Fonts, TracersType = {"Head","HumanoidRootPart","Torso","Left Arm","Right Arm","Left Leg","Right Leg","LeftHand","RightHand","LeftLowerArm","RightLowerArm","LeftUpperArm","RightUpperArm","LeftFoot","LeftLowerLeg","UpperTorso","LeftUpperLeg","RightFoot","RightLowerLeg","LowerTorso","RightUpperLeg"}, {"UI","System","Plex","Monospace"}, {"Bottom","Center","Mouse"}
 
 -- ══════════════════════════════════════════════════
