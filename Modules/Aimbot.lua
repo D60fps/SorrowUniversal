@@ -84,35 +84,108 @@ end
 local function ConvertVector(Vector)
     return safe(function()
         return Vector2new(Vector.X, Vector.Y)
-    end) or Vector2new(0, 0)
+    end) or Vector2new--// Cache
+local pcall, getgenv, next, setmetatable, Vector2new, CFramenew, Color3fromRGB, Drawingnew, TweenInfonew, stringupper, mousemoverel = pcall, getgenv, next, setmetatable, Vector2.new, CFrame.new, Color3.fromRGB, Drawing.new, TweenInfo.new, string.upper, mousemoverel or (Input and Input.MouseMove)
+
+--// Launching checks
+if not getgenv().AirHub then 
+    getgenv().AirHub = {}
+end
+if getgenv().AirHub.Aimbot then return end
+
+--// Services
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+--// Variables
+local RequiredDistance = 2000
+local Typing = false
+local Running = false
+local ServiceConnections = {}
+local Animation = nil
+local OriginalSensitivity = nil
+
+--// Environment
+getgenv().AirHub.Aimbot = {
+    Settings = {
+        Enabled = false,
+        TeamCheck = false,
+        AliveCheck = true,
+        WallCheck = false,
+        Sensitivity = 0,
+        ThirdPerson = false,
+        ThirdPersonSensitivity = 3,
+        TriggerKey = "MouseButton2",
+        Toggle = false,
+        LockPart = "Head"
+    },
+    FOVSettings = {
+        Enabled = false,
+        Visible = false,
+        Amount = 90,
+        Color = Color3fromRGB(255, 255, 255),
+        LockedColor = Color3fromRGB(255, 70, 70),
+        Transparency = 0.5,
+        Sides = 60,
+        Thickness = 1,
+        Filled = false
+    },
+    SilentAim = {
+        Enabled = false,
+        Toggle = false,
+        TriggerKey = "MouseButton2",
+        TeamCheck = false,
+        AliveCheck = true,
+        WallCheck = false,
+        LockPart = "Head",
+        UseFOV = true,
+        FOVAmount = 180,
+        Prediction = 0,
+    },
+    FOVCircle = Drawingnew and Drawingnew("Circle"),
+    Locked = nil
+}
+
+local Environment = getgenv().AirHub.Aimbot
+
+-- Make sure circle exists and is hidden
+if Environment.FOVCircle then
+    Environment.FOVCircle.Visible = false
 end
 
---// Cancel Lock
+--// Core Functions
+local function ConvertVector(Vector)
+    return Vector2new(Vector.X, Vector.Y)
+end
+
 local function CancelLock()
     Environment.Locked = nil
-    if Environment.FOVCircle then
+    if Environment.FOVCircle and Environment.FOVSettings then
         Environment.FOVCircle.Color = Environment.FOVSettings.Color
     end
     if OriginalSensitivity then
-        safe(function()
+        pcall(function()
             UserInputService.MouseDeltaSensitivity = OriginalSensitivity
         end)
     end
     if Animation then
-        safe(function()
+        pcall(function()
             Animation:Cancel()
             Animation = nil
         end)
     end
 end
 
---// Get Closest Player
 local function GetClosestPlayer()
     if not Environment.Locked then
         RequiredDistance = (Environment.FOVSettings.Enabled and Environment.FOVSettings.Amount or 2000)
 
         for _, v in next, Players:GetPlayers() do
-            safe(function()
+            pcall(function()
                 if v ~= LocalPlayer
                     and v.Character
                     and v.Character:FindFirstChild(Environment.Settings.LockPart)
@@ -120,7 +193,7 @@ local function GetClosestPlayer()
 
                     if Environment.Settings.TeamCheck and v.TeamColor == LocalPlayer.TeamColor then return end
                     if Environment.Settings.AliveCheck and v.Character:FindFirstChildOfClass("Humanoid").Health <= 0 then return end
-                    
+
                     local Vec, OnScreen = Camera:WorldToViewportPoint(v.Character[Environment.Settings.LockPart].Position)
                     if OnScreen then
                         Vec = ConvertVector(Vec)
@@ -135,7 +208,7 @@ local function GetClosestPlayer()
             end)
         end
     elseif Environment.Locked and Environment.Locked.Character and Environment.Locked.Character[Environment.Settings.LockPart] then
-        safe(function()
+        pcall(function()
             local screenPos, onScreen = Camera:WorldToViewportPoint(Environment.Locked.Character[Environment.Settings.LockPart].Position)
             if not onScreen or (UserInputService:GetMouseLocation() - ConvertVector(screenPos)).Magnitude > RequiredDistance then
                 CancelLock()
@@ -146,7 +219,12 @@ local function GetClosestPlayer()
     end
 end
 
---// Silent Aim Target
+--// Silent Aim
+local SAHooked = false
+local SA_orig_SP = nil
+local SA_orig_VP = nil
+local SA_Running = false
+
 local function GetSilentTarget()
     local SA = Environment.SilentAim
     local mouse = UserInputService:GetMouseLocation()
@@ -155,7 +233,7 @@ local function GetSilentTarget()
     local bestTarget = nil
 
     for _, v in next, Players:GetPlayers() do
-        safe(function()
+        pcall(function()
             if v == LocalPlayer then return end
             if not (v.Character
                 and v.Character:FindFirstChild(SA.LockPart)
@@ -177,30 +255,20 @@ local function GetSilentTarget()
 
     if not bestTarget then return nil end
 
-    return safe(function()
-        local pos = bestTarget.Character[SA.LockPart].Position
-        if SA.Prediction > 0 then
-            local hrp = bestTarget.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                pos = pos + hrp.AssemblyLinearVelocity * SA.Prediction
-            end
+    local pos = bestTarget.Character[SA.LockPart].Position
+    if SA.Prediction > 0 then
+        local hrp = bestTarget.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            pos = pos + hrp.AssemblyLinearVelocity * SA.Prediction
         end
-        return pos
-    end)
+    end
+    return pos
 end
 
---// Silent Aim Hooks
-local SAHooked = false
-local SA_orig_SP = nil
-local SA_orig_VP = nil
-local SA_Running = false
-
 local function MakeRayTowards(worldPos)
-    return safe(function()
-        local origin = Camera.CFrame.Position
-        local direction = (worldPos - origin).Unit * 5000
-        return Ray.new(origin, direction)
-    end) or Ray.new(Vector3new(0,0,0), Vector3new(0,0,0))
+    local origin = Camera.CFrame.Position
+    local direction = (worldPos - origin).Unit * 5000
+    return Ray.new(origin, direction)
 end
 
 local function InstallSilentAimHooks()
@@ -213,23 +281,17 @@ local function InstallSilentAimHooks()
     Camera.ScreenPointToRay = function(self, x, y, depth)
         if Environment.SilentAim.Enabled and SA_Running then
             local target = GetSilentTarget()
-            if target then 
-                local ray = MakeRayTowards(target)
-                if ray then return ray end
-            end
+            if target then return MakeRayTowards(target) end
         end
-        return SA_orig_SP and SA_orig_SP(self, x, y, depth) or Ray.new(Vector3new(0,0,0), Vector3new(0,0,0))
+        return SA_orig_SP and SA_orig_SP(self, x, y, depth) or Ray.new(Vector3.new(0,0,0), Vector3.new(0,0,0))
     end
 
     Camera.ViewportPointToRay = function(self, x, y, depth)
         if Environment.SilentAim.Enabled and SA_Running then
             local target = GetSilentTarget()
-            if target then 
-                local ray = MakeRayTowards(target)
-                if ray then return ray end
-            end
+            if target then return MakeRayTowards(target) end
         end
-        return SA_orig_VP and SA_orig_VP(self, x, y, depth) or Ray.new(Vector3new(0,0,0), Vector3new(0,0,0))
+        return SA_orig_VP and SA_orig_VP(self, x, y, depth) or Ray.new(Vector3.new(0,0,0), Vector3.new(0,0,0))
     end
 end
 
@@ -237,24 +299,19 @@ local function RemoveSilentAimHooks()
     if not SAHooked then return end
     SAHooked = false
 
-    if SA_orig_SP then 
-        safe(function() Camera.ScreenPointToRay = SA_orig_SP end)
-        SA_orig_SP = nil 
-    end
-    if SA_orig_VP then 
-        safe(function() Camera.ViewportPointToRay = SA_orig_VP end)
-        SA_orig_VP = nil 
-    end
+    if SA_orig_SP then Camera.ScreenPointToRay = SA_orig_SP end
+    if SA_orig_VP then Camera.ViewportPointToRay = SA_orig_VP end
+    SA_orig_SP = nil
+    SA_orig_VP = nil
 end
 
 --// Main Loop
 local function Load()
-    OriginalSensitivity = safe(function() return UserInputService.MouseDeltaSensitivity end) or 1
-
+    OriginalSensitivity = UserInputService.MouseDeltaSensitivity
     InstallSilentAimHooks()
 
     ServiceConnections.RenderSteppedConnection = RunService.RenderStepped:Connect(function()
-        safe(function()
+        pcall(function()
             local AF = Environment.FOVSettings
 
             -- FOV Circle
@@ -304,14 +361,11 @@ local function Load()
 
     ServiceConnections.InputBeganConnection = UserInputService.InputBegan:Connect(function(Input)
         if Typing then return end
-        safe(function()
+        pcall(function()
             -- Aimbot trigger
-            if (Input.UserInputType == Enum.UserInputType.Keyboard
-                    and Input.KeyCode == Enum.KeyCode[#Environment.Settings.TriggerKey == 1
-                        and stringupper(Environment.Settings.TriggerKey)
-                        or Environment.Settings.TriggerKey])
-                or Input.UserInputType == Enum.UserInputType[Environment.Settings.TriggerKey] then
-
+            local key = Environment.Settings.TriggerKey
+            if (Input.UserInputType == Enum.UserInputType.Keyboard and Input.KeyCode == Enum.KeyCode[key])
+                or Input.UserInputType == Enum.UserInputType[key] then
                 if Environment.Settings.Toggle then
                     Running = not Running
                     if not Running then CancelLock() end
@@ -321,12 +375,9 @@ local function Load()
             end
 
             -- Silent Aim trigger
-            if (Input.UserInputType == Enum.UserInputType.Keyboard
-                    and Input.KeyCode == Enum.KeyCode[#Environment.SilentAim.TriggerKey == 1
-                        and stringupper(Environment.SilentAim.TriggerKey)
-                        or Environment.SilentAim.TriggerKey])
-                or Input.UserInputType == Enum.UserInputType[Environment.SilentAim.TriggerKey] then
-
+            local saKey = Environment.SilentAim.TriggerKey
+            if (Input.UserInputType == Enum.UserInputType.Keyboard and Input.KeyCode == Enum.KeyCode[saKey])
+                or Input.UserInputType == Enum.UserInputType[saKey] then
                 if Environment.SilentAim.Toggle then
                     SA_Running = not SA_Running
                 else
@@ -338,14 +389,12 @@ local function Load()
 
     ServiceConnections.InputEndedConnection = UserInputService.InputEnded:Connect(function(Input)
         if Typing then return end
-        safe(function()
+        pcall(function()
             -- Aimbot release
             if not Environment.Settings.Toggle then
-                if (Input.UserInputType == Enum.UserInputType.Keyboard
-                        and Input.KeyCode == Enum.KeyCode[#Environment.Settings.TriggerKey == 1
-                            and stringupper(Environment.Settings.TriggerKey)
-                            or Environment.Settings.TriggerKey])
-                    or Input.UserInputType == Enum.UserInputType[Environment.Settings.TriggerKey] then
+                local key = Environment.Settings.TriggerKey
+                if (Input.UserInputType == Enum.UserInputType.Keyboard and Input.KeyCode == Enum.KeyCode[key])
+                    or Input.UserInputType == Enum.UserInputType[key] then
                     Running = false
                     CancelLock()
                 end
@@ -353,11 +402,9 @@ local function Load()
 
             -- Silent Aim release
             if not Environment.SilentAim.Toggle then
-                if (Input.UserInputType == Enum.UserInputType.Keyboard
-                        and Input.KeyCode == Enum.KeyCode[#Environment.SilentAim.TriggerKey == 1
-                            and stringupper(Environment.SilentAim.TriggerKey)
-                            or Environment.SilentAim.TriggerKey])
-                    or Input.UserInputType == Enum.UserInputType[Environment.SilentAim.TriggerKey] then
+                local saKey = Environment.SilentAim.TriggerKey
+                if (Input.UserInputType == Enum.UserInputType.Keyboard and Input.KeyCode == Enum.KeyCode[saKey])
+                    or Input.UserInputType == Enum.UserInputType[saKey] then
                     SA_Running = false
                 end
             end
@@ -375,24 +422,23 @@ local function Load()
 end
 
 --// Functions
+Environment.Functions = {}
+
 function Environment.Functions:Exit()
     for _, v in next, ServiceConnections do
-        safe(function() v:Disconnect() end)
+        pcall(function() v:Disconnect() end)
     end
-
     RemoveSilentAimHooks()
     if Environment.FOVCircle then
-        safe(function() Environment.FOVCircle:Remove() end)
+        pcall(function() Environment.FOVCircle:Remove() end)
     end
-
     getgenv().AirHub.Aimbot = nil
 end
 
 function Environment.Functions:Restart()
     for _, v in next, ServiceConnections do
-        safe(function() v:Disconnect() end)
+        pcall(function() v:Disconnect() end)
     end
-
     RemoveSilentAimHooks()
     Load()
 end
@@ -403,13 +449,11 @@ function Environment.Functions:ResetSettings()
         Sensitivity = 0, ThirdPerson = false, ThirdPersonSensitivity = 3,
         TriggerKey = "MouseButton2", Toggle = false, LockPart = "Head"
     }
-
     Environment.FOVSettings = {
         Enabled = false, Visible = false, Amount = 90,
         Color = Color3fromRGB(255, 255, 255), LockedColor = Color3fromRGB(255, 70, 70),
         Transparency = 0.5, Sides = 60, Thickness = 1, Filled = false
     }
-
     Environment.SilentAim = {
         Enabled = false, Toggle = false, TriggerKey = "MouseButton2",
         TeamCheck = false, AliveCheck = true, WallCheck = false,
@@ -420,5 +464,5 @@ end
 --// Load
 local success, err = pcall(Load)
 if not success then
-    warn("[AirHub] Aimbot failed to load:", err)
+    warn("Aimbot failed to load: " .. tostring(err))
 end
