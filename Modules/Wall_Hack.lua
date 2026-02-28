@@ -10,25 +10,16 @@ end
 if getgenv().AirHub.WallHack then return end
 
 --// Services
-local RunService       = game:GetService("RunService")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local Players          = game:GetService("Players")
-local LocalPlayer      = Players.LocalPlayer
-local Camera           = workspace.CurrentCamera
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 
 --// Variables
 local ServiceConnections = {}
 
---// Safe wrapper
-local function safe(fn, ...)
-    local success, result = pcall(fn, ...)
-    if success then
-        return result
-    end
-    return nil
-end
-
---// Clamp function
+--// Clamp function (for executors that don't have math.clamp)
 local function clamp(x, min, max)
     if x < min then return min end
     if x > max then return max end
@@ -37,76 +28,75 @@ end
 
 --// Get Distance
 local function GetDistance(TargetPos)
-    return safe(function()
-        local LP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if not LP then return math.huge end
-        return (TargetPos - LP.Position).Magnitude
-    end) or math.huge
+    local LP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not LP then return math.huge end
+    return (TargetPos - LP.Position).Magnitude
 end
 
 --// World to Viewport
 local function W2V(pos)
-    return safe(function() return Camera:WorldToViewportPoint(pos) end) or {Vector3new(0,0,0), false}
+    return Camera:WorldToViewportPoint(pos)
 end
 
 --// Environment
 getgenv().AirHub.WallHack = {
     Settings = {
-        Enabled     = false,
-        TeamCheck   = false,
-        AliveCheck  = true,
+        Enabled = false,
+        TeamCheck = false,
+        AliveCheck = true,
         MaxDistance = 1000
     },
     Visuals = {
         ChamsSettings = {
-            Enabled=false, Color=Color3fromRGB(255,255,255), Transparency=0.2,
-            Thickness=0, Filled=true, EntireBody=false
+            Enabled = false, Color = Color3fromRGB(255,255,255), Transparency = 0.2,
+            Thickness = 0, Filled = true, EntireBody = false
         },
         ESPSettings = {
-            Enabled=true, TextColor=Color3fromRGB(255,255,255), TextSize=14,
-            Outline=true, OutlineColor=Color3fromRGB(0,0,0), TextTransparency=0.7,
-            TextFont=Drawing.Fonts.UI, Offset=20,
-            DisplayDistance=true, DisplayHealth=true, DisplayName=true
+            Enabled = true, TextColor = Color3fromRGB(255,255,255), TextSize = 14,
+            Outline = true, OutlineColor = Color3fromRGB(0,0,0), TextTransparency = 0.7,
+            TextFont = Drawing and Drawing.Fonts and Drawing.Fonts.UI or 1, Offset = 20,
+            DisplayDistance = true, DisplayHealth = true, DisplayName = true
         },
         TracersSettings = {
-            Enabled=true, Type=1, Transparency=0.7, Thickness=1, Color=Color3fromRGB(255,255,255)
+            Enabled = true, Type = 1, Transparency = 0.7, Thickness = 1, Color = Color3fromRGB(255,255,255)
         },
         BoxSettings = {
-            Enabled=true, Type=1, Color=Color3fromRGB(255,255,255),
-            Transparency=0.7, Thickness=1, Filled=false, Increase=1
+            Enabled = true, Type = 1, Color = Color3fromRGB(255,255,255),
+            Transparency = 0.7, Thickness = 1, Filled = false, Increase = 1
         },
         HeadDotSettings = {
-            Enabled=true, Color=Color3fromRGB(255,255,255), Transparency=0.5,
-            Thickness=1, Filled=false, Sides=30
+            Enabled = true, Color = Color3fromRGB(255,255,255), Transparency = 0.5,
+            Thickness = 1, Filled = false, Sides = 30
         },
         HealthBarSettings = {
-            Enabled=false, Transparency=0.8, Size=2, Offset=10,
-            OutlineColor=Color3fromRGB(0,0,0), Blue=50, Type=3
+            Enabled = false, Transparency = 0.8, Size = 2, Offset = 10,
+            OutlineColor = Color3fromRGB(0,0,0), Blue = 50, Type = 3
         }
     },
     Crosshair = {
         Settings = {
-            Enabled=false, Type=1, Size=12, Thickness=1,
-            Color=Color3fromRGB(0,255,0), Transparency=1, GapSize=5, Rotation=0,
-            CenterDot=false, CenterDotColor=Color3fromRGB(0,255,0), CenterDotSize=1,
-            CenterDotTransparency=1, CenterDotFilled=true, CenterDotThickness=1
+            Enabled = false, Type = 1, Size = 12, Thickness = 1,
+            Color = Color3fromRGB(0,255,0), Transparency = 1, GapSize = 5, Rotation = 0,
+            CenterDot = false, CenterDotColor = Color3fromRGB(0,255,0), CenterDotSize = 1,
+            CenterDotTransparency = 1, CenterDotFilled = true, CenterDotThickness = 1
         },
         Parts = {}
     },
-    WrappedPlayers = {},
-    Functions = {}
+    WrappedPlayers = {}
 }
 
 local Environment = getgenv().AirHub.WallHack
 
---// Initialize Crosshair Parts
-Environment.Crosshair.Parts = {
-    LeftLine = safe(function() return Drawingnew("Line") end) or nil,
-    RightLine = safe(function() return Drawingnew("Line") end) or nil,
-    TopLine = safe(function() return Drawingnew("Line") end) or nil,
-    BottomLine = safe(function() return Drawingnew("Line") end) or nil,
-    CenterDot = safe(function() return Drawingnew("Circle") end) or nil
-}
+-- Initialize Crosshair Parts safely
+if Drawingnew then
+    Environment.Crosshair.Parts = {
+        LeftLine = Drawingnew("Line"),
+        RightLine = Drawingnew("Line"),
+        TopLine = Drawingnew("Line"),
+        BottomLine = Drawingnew("Line"),
+        CenterDot = Drawingnew("Circle")
+    }
+end
 
 --// Rig Detection
 local R15_SLIM = {"Head","UpperTorso","LeftLowerArm","LeftUpperArm","RightLowerArm","RightUpperArm","LeftLowerLeg","LeftUpperLeg","RightLowerLeg","RightUpperLeg"}
@@ -128,7 +118,7 @@ local function BuildChams(ct, rig, full)
         if c then
             for i=1,6 do 
                 if c["Quad"..i] then
-                    safe(function() c["Quad"..i]:Remove() end)
+                    pcall(function() c["Quad"..i]:Remove() end)
                 end
             end
         end
@@ -136,14 +126,15 @@ local function BuildChams(ct, rig, full)
     
     for k in next, ct do ct[k] = nil end
     
-    local parts = rig=="R6" and R6_PARTS or (full and R15_FULL or R15_SLIM)
+    if not Drawingnew then return ct end
+    
+    local parts = rig == "R6" and R6_PARTS or (full and R15_FULL or R15_SLIM)
     for _, name in next, parts do
         ct[name] = {}
         for i=1,6 do 
-            ct[name]["Quad"..i] = safe(function() return Drawingnew("Quad") end) or nil
+            ct[name]["Quad"..i] = Drawingnew("Quad")
         end
     end
-    
     return ct
 end
 
@@ -166,9 +157,9 @@ local function UpdateCham(Part, Cham)
     local CS = Environment.Visuals.ChamsSettings
     if not CS then return end
     
-    safe(function()
+    pcall(function()
         local cf, sz = Part.CFrame, Part.Size/2
-        local _, vis = W2V((cf*CFramenew(sz.X,sz.Y,sz.Z)).Position)
+        local _, vis = W2V((cf * CFramenew(sz.X, sz.Y, sz.Z)).Position)
         if not (vis and CS.Enabled) then 
             for i=1,6 do 
                 if Cham["Quad"..i] then
@@ -179,35 +170,35 @@ local function UpdateCham(Part, Cham)
         end
         
         local c = {
-            W2V((cf*CFramenew( sz.X, sz.Y, sz.Z)).Position), 
-            W2V((cf*CFramenew(-sz.X, sz.Y, sz.Z)).Position),
-            W2V((cf*CFramenew( sz.X,-sz.Y, sz.Z)).Position), 
-            W2V((cf*CFramenew(-sz.X,-sz.Y, sz.Z)).Position),
-            W2V((cf*CFramenew( sz.X, sz.Y,-sz.Z)).Position), 
-            W2V((cf*CFramenew(-sz.X, sz.Y,-sz.Z)).Position),
-            W2V((cf*CFramenew( sz.X,-sz.Y,-sz.Z)).Position), 
-            W2V((cf*CFramenew(-sz.X,-sz.Y,-sz.Z)).Position),
+            W2V((cf * CFramenew( sz.X, sz.Y, sz.Z)).Position),
+            W2V((cf * CFramenew(-sz.X, sz.Y, sz.Z)).Position),
+            W2V((cf * CFramenew( sz.X,-sz.Y, sz.Z)).Position),
+            W2V((cf * CFramenew(-sz.X,-sz.Y, sz.Z)).Position),
+            W2V((cf * CFramenew( sz.X, sz.Y,-sz.Z)).Position),
+            W2V((cf * CFramenew(-sz.X, sz.Y,-sz.Z)).Position),
+            W2V((cf * CFramenew( sz.X,-sz.Y,-sz.Z)).Position),
+            W2V((cf * CFramenew(-sz.X,-sz.Y,-sz.Z)).Position),
         }
         
-        local v2=function(p) return Vector2new(p.X,p.Y) end
-        local faces={
-            {c[1],c[3],c[4],c[2]}, {c[5],c[7],c[8],c[6]},
-            {c[1],c[5],c[6],c[2]}, {c[3],c[7],c[8],c[4]},
-            {c[1],c[3],c[7],c[5]}, {c[2],c[4],c[8],c[6]}
+        local v2 = function(p) return Vector2new(p.X, p.Y) end
+        local faces = {
+            {c[1], c[3], c[4], c[2]}, {c[5], c[7], c[8], c[6]},
+            {c[1], c[5], c[6], c[2]}, {c[3], c[7], c[8], c[4]},
+            {c[1], c[3], c[7], c[5]}, {c[2], c[4], c[8], c[6]}
         }
         
         for i=1,6 do
-            local q=Cham["Quad"..i]
+            local q = Cham["Quad"..i]
             if q then
-                q.Transparency=CS.Transparency
-                q.Color=CS.Color
-                q.Thickness=CS.Thickness
-                q.Filled=CS.Filled
-                q.Visible=true
-                q.PointA=v2(faces[i][1])
-                q.PointB=v2(faces[i][2])
-                q.PointC=v2(faces[i][3])
-                q.PointD=v2(faces[i][4])
+                q.Transparency = CS.Transparency
+                q.Color = CS.Color
+                q.Thickness = CS.Thickness
+                q.Filled = CS.Filled
+                q.Visible = true
+                q.PointA = v2(faces[i][1])
+                q.PointB = v2(faces[i][2])
+                q.PointC = v2(faces[i][3])
+                q.PointD = v2(faces[i][4])
             end
         end
     end)
@@ -226,16 +217,17 @@ local function Wrap(Player)
     if GetPlayerTable(Player) then return end
 
     local D = {}
-    
-    safe(function()
-        D.ESP = Drawingnew("Text")
-        D.Tracer = Drawingnew("Line")
-        D.HeadDot = Drawingnew("Circle")
-        D.HBMain = Drawingnew("Square")
-        D.HBOutline = Drawingnew("Square")
-        D.Box2D = Drawingnew("Square")
-        for i=1,8 do D["C"..i] = Drawingnew("Line") end
-    end)
+    if Drawingnew then
+        pcall(function()
+            D.ESP = Drawingnew("Text")
+            D.Tracer = Drawingnew("Line")
+            D.HeadDot = Drawingnew("Circle")
+            D.HBMain = Drawingnew("Square")
+            D.HBOutline = Drawingnew("Square")
+            D.Box2D = Drawingnew("Square")
+            for i=1,8 do D["C"..i] = Drawingnew("Line") end
+        end)
+    end
 
     local Chams = {}
     local rigType = "R15"
@@ -245,7 +237,7 @@ local function Wrap(Player)
         rigType = DetectRig(Player.Character)
     end
     
-    Chams = BuildChams(Chams, rigType, oldEntire) or {}
+    Chams = BuildChams(Chams, rigType, oldEntire)
 
     local Entry = { 
         Name = Player.Name, 
@@ -282,7 +274,7 @@ local function Wrap(Player)
     end
 
     Entry.Connections.Render = RunService.RenderStepped:Connect(function()
-        safe(function()
+        pcall(function()
             local S = Environment.Settings
             local char = Player.Character
             if not (S and S.Enabled and char) then HideAll(); return end
@@ -497,14 +489,14 @@ local function UnWrap(Player)
     
     for _, conn in next, Table.Connections do 
         if conn then
-            safe(function() conn:Disconnect() end)
+            pcall(function() conn:Disconnect() end)
         end
     end
     
     if Table.Drawings then
         for _, d in next, Table.Drawings do 
             if d then
-                safe(function() d:Remove() end)
+                pcall(function() d:Remove() end)
             end
         end
     end
@@ -514,7 +506,7 @@ local function UnWrap(Player)
             if cham then
                 for i=1,6 do 
                     if cham["Quad"..i] then
-                        safe(function() cham["Quad"..i]:Remove() end)
+                        pcall(function() cham["Quad"..i]:Remove() end)
                     end
                 end
             end
@@ -528,8 +520,10 @@ end
 
 --// Crosshair
 local function AddCrosshair()
+    if not Environment.Crosshair.Parts.LeftLine then return end
+    
     ServiceConnections.CrosshairConnection = RunService.RenderStepped:Connect(function()
-        safe(function()
+        pcall(function()
             local CS = Environment.Crosshair.Settings
             local CP = Environment.Crosshair.Parts
             
@@ -614,16 +608,18 @@ local function Load()
 end
 
 --// Functions
+Environment.Functions = {}
+
 function Environment.Functions:Exit()
     for _, v in next, ServiceConnections do 
         if v then
-            safe(function() v:Disconnect() end)
+            pcall(function() v:Disconnect() end)
         end
     end
     
     for _, v in next, Environment.Crosshair.Parts do 
         if v then
-            safe(function() v:Remove() end)
+            pcall(function() v:Remove() end)
         end
     end
     
@@ -645,7 +641,7 @@ function Environment.Functions:Restart()
     
     for _, v in next, ServiceConnections do 
         if v then
-            safe(function() v:Disconnect() end)
+            pcall(function() v:Disconnect() end)
         end
     end
     
@@ -654,24 +650,24 @@ function Environment.Functions:Restart()
 end
 
 function Environment.Functions:ResetSettings()
-    Environment.Settings = {Enabled=false, TeamCheck=false, AliveCheck=true, MaxDistance=1000}
+    Environment.Settings = {Enabled = false, TeamCheck = false, AliveCheck = true, MaxDistance = 1000}
     Environment.Visuals = {
-        ChamsSettings = {Enabled=false, Color=Color3fromRGB(255,255,255), Transparency=0.2, Thickness=0, Filled=true, EntireBody=false},
-        ESPSettings = {Enabled=true, TextColor=Color3fromRGB(255,255,255), TextSize=14, Outline=true, OutlineColor=Color3fromRGB(0,0,0), TextTransparency=0.7, TextFont=Drawing.Fonts.UI, Offset=20, DisplayDistance=true, DisplayHealth=true, DisplayName=true},
-        TracersSettings = {Enabled=true, Type=1, Transparency=0.7, Thickness=1, Color=Color3fromRGB(255,255,255)},
-        BoxSettings = {Enabled=true, Type=1, Color=Color3fromRGB(255,255,255), Transparency=0.7, Thickness=1, Filled=false, Increase=1},
-        HeadDotSettings = {Enabled=true, Color=Color3fromRGB(255,255,255), Transparency=0.5, Thickness=1, Filled=false, Sides=30},
-        HealthBarSettings = {Enabled=false, Transparency=0.8, Size=2, Offset=10, OutlineColor=Color3fromRGB(0,0,0), Blue=50, Type=3}
+        ChamsSettings = {Enabled = false, Color = Color3fromRGB(255,255,255), Transparency = 0.2, Thickness = 0, Filled = true, EntireBody = false},
+        ESPSettings = {Enabled = true, TextColor = Color3fromRGB(255,255,255), TextSize = 14, Outline = true, OutlineColor = Color3fromRGB(0,0,0), TextTransparency = 0.7, TextFont = Drawing and Drawing.Fonts and Drawing.Fonts.UI or 1, Offset = 20, DisplayDistance = true, DisplayHealth = true, DisplayName = true},
+        TracersSettings = {Enabled = true, Type = 1, Transparency = 0.7, Thickness = 1, Color = Color3fromRGB(255,255,255)},
+        BoxSettings = {Enabled = true, Type = 1, Color = Color3fromRGB(255,255,255), Transparency = 0.7, Thickness = 1, Filled = false, Increase = 1},
+        HeadDotSettings = {Enabled = true, Color = Color3fromRGB(255,255,255), Transparency = 0.5, Thickness = 1, Filled = false, Sides = 30},
+        HealthBarSettings = {Enabled = false, Transparency = 0.8, Size = 2, Offset = 10, OutlineColor = Color3fromRGB(0,0,0), Blue = 50, Type = 3}
     }
     Environment.Crosshair.Settings = {
-        Enabled=false, Type=1, Size=12, Thickness=1, Color=Color3fromRGB(0,255,0), Transparency=1, GapSize=5,
-        Rotation=0, CenterDot=false, CenterDotColor=Color3fromRGB(0,255,0), CenterDotSize=1,
-        CenterDotTransparency=1, CenterDotFilled=true, CenterDotThickness=1
+        Enabled = false, Type = 1, Size = 12, Thickness = 1, Color = Color3fromRGB(0,255,0), Transparency = 1, GapSize = 5,
+        Rotation = 0, CenterDot = false, CenterDotColor = Color3fromRGB(0,255,0), CenterDotSize = 1,
+        CenterDotTransparency = 1, CenterDotFilled = true, CenterDotThickness = 1
     }
-}
+end
 
---// Load with error handling
+--// Load
 local success, err = pcall(Load)
 if not success then
-    warn("[AirHub] WallHack failed to load:", err)
+    warn("WallHack failed to load: " .. tostring(err))
 end
