@@ -10,8 +10,8 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 --// Load Modules
-local WallHack = loadstring(game:HttpGet("https://raw.githubusercontent.com/yourrepo/WallHack.lua"))()
-local Aimbot = loadstring(game:HttpGet("https://raw.githubusercontent.com/yourrepo/Aimbot.lua"))()
+local WallHack = loadstring(game:HttpGet("https://raw.githubusercontent.com/D60fps/SorrowUniversal/main/Modules/Wall_Hack.lua"))()
+local Aimbot = loadstring(game:HttpGet("https://raw.githubusercontent.com/D60fps/SorrowUniversal/main/Modules/Aimbot.lua"))()
 
 --// Lindoria Library (Simulated)
 local Library = {}
