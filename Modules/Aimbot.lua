@@ -1,13 +1,32 @@
---// Cache
+-- Aimbot.lua - Rewritten & Optimized
+--[[
+Fixes:
+- Fixed missing mousemoverel fallback
+- Fixed Input handling for keys
+- Fixed animation cleanup
+- Added proper error handling
+- Optimized performance
+]]
 
-local pcall, getgenv, next, setmetatable, Vector2new, CFramenew, Color3fromRGB, Drawingnew, TweenInfonew, stringupper, mousemoverel = pcall, getgenv, next, setmetatable, Vector2.new, CFrame.new, Color3.fromRGB, Drawing.new, TweenInfo.new, string.upper, mousemoverel or (Input and Input.MouseMove)
+--// Cache
+local pcall = pcall
+local getgenv = getgenv
+local next = next
+local setmetatable = setmetatable
+local Vector2new = Vector2.new
+local CFramenew = CFrame.new
+local Color3fromRGB = Color3.fromRGB
+local Drawingnew = Drawing.new
+local TweenInfonew = TweenInfo.new
+local stringupper = string.upper
+local mousemoverel = mousemoverel or (Input and Input.MouseMove) or function() end
 
 --// Launching checks
-
-if not getgenv().AirHub or getgenv().AirHub.Aimbot then return end
+if not getgenv().AirHub or getgenv().AirHub.Aimbot then 
+    return 
+end
 
 --// Services
-
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -16,220 +35,341 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 --// Variables
+local RequiredDistance = 2000
+local Typing = false
+local Running = false
+local ServiceConnections = {}
+local Animation = nil
+local OriginalSensitivity = 1
+local CurrentTarget = nil
 
-local RequiredDistance, Typing, Running, ServiceConnections, Animation, OriginalSensitivity = 2000, false, false, {}
-
---// Environment
-
+--// Environment Setup
 getgenv().AirHub.Aimbot = {
-	Settings = {
-		Enabled = false,
-		TeamCheck = false,
-		AliveCheck = true,
-		WallCheck = false,
-		Sensitivity = 0, -- Animation length (in seconds) before fully locking onto target
-		ThirdPerson = false, -- Uses mousemoverel instead of CFrame to support locking in third person (could be choppy)
-		ThirdPersonSensitivity = 3,
-		TriggerKey = "MouseButton2",
-		Toggle = false,
-		LockPart = "Head" -- Body part to lock on
-	},
-
-	FOVSettings = {
-		Enabled = true,
-		Visible = true,
-		Amount = 90,
-		Color = Color3fromRGB(255, 255, 255),
-		LockedColor = Color3fromRGB(255, 70, 70),
-		Transparency = 0.5,
-		Sides = 60,
-		Thickness = 1,
-		Filled = false
-	},
-
-	FOVCircle = Drawingnew("Circle")
+    Settings = {
+        Enabled = false,
+        TeamCheck = false,
+        AliveCheck = true,
+        WallCheck = false,
+        Sensitivity = 0,
+        ThirdPerson = false,
+        ThirdPersonSensitivity = 3,
+        TriggerKey = "MouseButton2",
+        Toggle = false,
+        LockPart = "Head"
+    },
+    
+    FOVSettings = {
+        Enabled = true,
+        Visible = true,
+        Amount = 90,
+        Color = Color3fromRGB(255, 255, 255),
+        LockedColor = Color3fromRGB(255, 70, 70),
+        Transparency = 0.5,
+        Sides = 60,
+        Thickness = 1,
+        Filled = false
+    },
+    
+    FOVCircle = Drawingnew("Circle"),
+    Locked = nil,
+    Functions = {}
 }
 
 local Environment = getgenv().AirHub.Aimbot
 
---// Core Functions
-
+--// Utility Functions
 local function ConvertVector(Vector)
-	return Vector2new(Vector.X, Vector.Y)
+    return Vector2new(Vector.X, Vector.Y)
 end
 
 local function CancelLock()
-	Environment.Locked = nil
-	Environment.FOVCircle.Color = Environment.FOVSettings.Color
-	UserInputService.MouseDeltaSensitivity = OriginalSensitivity
+    Environment.Locked = nil
+    Environment.FOVCircle.Color = Environment.FOVSettings.Color
+    
+    if OriginalSensitivity then
+        UserInputService.MouseDeltaSensitivity = OriginalSensitivity
+    end
+    
+    if Animation then
+        Animation:Cancel()
+        Animation = nil
+    end
+end
 
-	if Animation then
-		Animation:Cancel()
-	end
+local function IsPlayerValid(Player)
+    if not Player or Player == LocalPlayer then
+        return false
+    end
+    
+    local Character = Player.Character
+    if not Character then
+        return false
+    end
+    
+    local LockPart = Character:FindFirstChild(Environment.Settings.LockPart)
+    if not LockPart then
+        return false
+    end
+    
+    local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+    if not Humanoid then
+        return false
+    end
+    
+    -- Team Check
+    if Environment.Settings.TeamCheck and Player.TeamColor == LocalPlayer.TeamColor then
+        return false
+    end
+    
+    -- Alive Check
+    if Environment.Settings.AliveCheck and Humanoid.Health <= 0 then
+        return false
+    end
+    
+    -- Wall Check
+    if Environment.Settings.WallCheck then
+        local PartPosition = LockPart.Position
+        local ObscuringParts = Camera:GetPartsObscuringTarget({PartPosition}, Character:GetDescendants())
+        if #ObscuringParts > 0 then
+            return false
+        end
+    end
+    
+    return true
 end
 
 local function GetClosestPlayer()
-	if not Environment.Locked then
-		RequiredDistance = (Environment.FOVSettings.Enabled and Environment.FOVSettings.Amount or 2000)
-
-		for _, v in next, Players:GetPlayers() do
-			if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(Environment.Settings.LockPart) and v.Character:FindFirstChildOfClass("Humanoid") then
-				if Environment.Settings.TeamCheck and v.TeamColor == LocalPlayer.TeamColor then continue end
-				if Environment.Settings.AliveCheck and v.Character:FindFirstChildOfClass("Humanoid").Health <= 0 then continue end
-				if Environment.Settings.WallCheck and #(Camera:GetPartsObscuringTarget({v.Character[Environment.Settings.LockPart].Position}, v.Character:GetDescendants())) > 0 then continue end
-
-				local Vector, OnScreen = Camera:WorldToViewportPoint(v.Character[Environment.Settings.LockPart].Position); Vector = ConvertVector(Vector)
-				local Distance = (UserInputService:GetMouseLocation() - Vector).Magnitude
-
-				if Distance < RequiredDistance and OnScreen then
-					RequiredDistance = Distance
-					Environment.Locked = v
-				end
-			end
-		end
-	elseif (UserInputService:GetMouseLocation() - ConvertVector(Camera:WorldToViewportPoint(Environment.Locked.Character[Environment.Settings.LockPart].Position))).Magnitude > RequiredDistance then
-		CancelLock()
-	end
+    if not Environment.Locked then
+        RequiredDistance = Environment.FOVSettings.Enabled and Environment.FOVSettings.Amount or 2000
+        
+        for _, Player in next, Players:GetPlayers() do
+            if IsPlayerValid(Player) then
+                local Character = Player.Character
+                local LockPart = Character[Environment.Settings.LockPart]
+                
+                local Vector, OnScreen = Camera:WorldToViewportPoint(LockPart.Position)
+                if OnScreen then
+                    local Vector2D = ConvertVector(Vector)
+                    local Distance = (UserInputService:GetMouseLocation() - Vector2D).Magnitude
+                    
+                    if Distance < RequiredDistance then
+                        RequiredDistance = Distance
+                        Environment.Locked = Player
+                    end
+                end
+            end
+        end
+    elseif Environment.Locked and Environment.Locked.Character then
+        local LockPart = Environment.Locked.Character:FindFirstChild(Environment.Settings.LockPart)
+        if LockPart then
+            local Vector = ConvertVector(Camera:WorldToViewportPoint(LockPart.Position))
+            local Distance = (UserInputService:GetMouseLocation() - Vector).Magnitude
+            
+            if Distance > RequiredDistance then
+                CancelLock()
+            end
+        else
+            CancelLock()
+        end
+    else
+        CancelLock()
+    end
 end
 
+local function UpdateFOVCircle()
+    local FOV = Environment.FOVCircle
+    local Settings = Environment.FOVSettings
+    
+    if Settings.Enabled and Environment.Settings.Enabled then
+        FOV.Radius = Settings.Amount
+        FOV.Thickness = Settings.Thickness
+        FOV.Filled = Settings.Filled
+        FOV.NumSides = Settings.Sides
+        FOV.Color = Environment.Locked and Settings.LockedColor or Settings.Color
+        FOV.Transparency = Settings.Transparency
+        FOV.Visible = Settings.Visible
+        FOV.Position = ConvertVector(UserInputService:GetMouseLocation())
+    else
+        FOV.Visible = false
+    end
+end
+
+local function PerformLock()
+    if not (Running and Environment.Settings.Enabled and Environment.Locked) then
+        return
+    end
+    
+    local Target = Environment.Locked
+    local Character = Target.Character
+    if not Character then
+        CancelLock()
+        return
+    end
+    
+    local LockPart = Character:FindFirstChild(Environment.Settings.LockPart)
+    if not LockPart then
+        CancelLock()
+        return
+    end
+    
+    if Environment.Settings.ThirdPerson then
+        local Vector = Camera:WorldToViewportPoint(LockPart.Position)
+        local MousePos = UserInputService:GetMouseLocation()
+        local DeltaX = (Vector.X - MousePos.X) * Environment.Settings.ThirdPersonSensitivity
+        local DeltaY = (Vector.Y - MousePos.Y) * Environment.Settings.ThirdPersonSensitivity
+        
+        pcall(mousemoverel, DeltaX, DeltaY)
+    else
+        if Environment.Settings.Sensitivity > 0 then
+            if Animation then
+                Animation:Cancel()
+            end
+            
+            Animation = TweenService:Create(
+                Camera, 
+                TweenInfonew(Environment.Settings.Sensitivity, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+                {CFrame = CFramenew(Camera.CFrame.Position, LockPart.Position)}
+            )
+            Animation:Play()
+        else
+            Camera.CFrame = CFramenew(Camera.CFrame.Position, LockPart.Position)
+        end
+        
+        UserInputService.MouseDeltaSensitivity = 0
+    end
+end
+
+local function HandleInput(Input, IsBeginning)
+    if Typing then
+        return
+    end
+    
+    local TriggerKey = Environment.Settings.TriggerKey
+    local IsKeyMatch = false
+    
+    -- Check if input matches trigger key
+    pcall(function()
+        if Input.UserInputType == Enum.UserInputType.Keyboard then
+            local KeyCode = tostring(Input.KeyCode):gsub("Enum.KeyCode.", "")
+            if #TriggerKey == 1 then
+                IsKeyMatch = KeyCode == stringupper(TriggerKey)
+            else
+                IsKeyMatch = KeyCode == TriggerKey
+            end
+        else
+            IsKeyMatch = Input.UserInputType == Enum.UserInputType[TriggerKey]
+        end
+    end)
+    
+    if not IsKeyMatch then
+        return
+    end
+    
+    if Environment.Settings.Toggle then
+        if IsBeginning then
+            Running = not Running
+            if not Running then
+                CancelLock()
+            end
+        end
+    elseif IsBeginning then
+        Running = true
+    else
+        Running = false
+        CancelLock()
+    end
+end
+
+--// Main Load Function
 local function Load()
-	OriginalSensitivity = UserInputService.MouseDeltaSensitivity
-
-	ServiceConnections.RenderSteppedConnection = RunService.RenderStepped:Connect(function()
-		if Environment.FOVSettings.Enabled and Environment.Settings.Enabled then
-			Environment.FOVCircle.Radius = Environment.FOVSettings.Amount
-			Environment.FOVCircle.Thickness = Environment.FOVSettings.Thickness
-			Environment.FOVCircle.Filled = Environment.FOVSettings.Filled
-			Environment.FOVCircle.NumSides = Environment.FOVSettings.Sides
-			Environment.FOVCircle.Color = Environment.FOVSettings.Color
-			Environment.FOVCircle.Transparency = Environment.FOVSettings.Transparency
-			Environment.FOVCircle.Visible = Environment.FOVSettings.Visible
-			Environment.FOVCircle.Position = Vector2new(UserInputService:GetMouseLocation().X, UserInputService:GetMouseLocation().Y)
-		else
-			Environment.FOVCircle.Visible = false
-		end
-
-		if Running and Environment.Settings.Enabled then
-			GetClosestPlayer()
-
-			if Environment.Locked then
-				if Environment.Settings.ThirdPerson then
-					local Vector = Camera:WorldToViewportPoint(Environment.Locked.Character[Environment.Settings.LockPart].Position)
-
-					mousemoverel((Vector.X - UserInputService:GetMouseLocation().X) * Environment.Settings.ThirdPersonSensitivity, (Vector.Y - UserInputService:GetMouseLocation().Y) * Environment.Settings.ThirdPersonSensitivity)
-				else
-					if Environment.Settings.Sensitivity > 0 then
-						Animation = TweenService:Create(Camera, TweenInfonew(Environment.Settings.Sensitivity, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {CFrame = CFramenew(Camera.CFrame.Position, Environment.Locked.Character[Environment.Settings.LockPart].Position)})
-						Animation:Play()
-					else
-						Camera.CFrame = CFramenew(Camera.CFrame.Position, Environment.Locked.Character[Environment.Settings.LockPart].Position)
-					end
-
-					UserInputService.MouseDeltaSensitivity = 0
-				end
-
-				Environment.FOVCircle.Color = Environment.FOVSettings.LockedColor
-			end
-		end
-	end)
-
-	ServiceConnections.InputBeganConnection = UserInputService.InputBegan:Connect(function(Input)
-		if not Typing then
-			pcall(function()
-				if Input.UserInputType == Enum.UserInputType.Keyboard and Input.KeyCode == Enum.KeyCode[#Environment.Settings.TriggerKey == 1 and stringupper(Environment.Settings.TriggerKey) or Environment.Settings.TriggerKey] or Input.UserInputType == Enum.UserInputType[Environment.Settings.TriggerKey] then
-					if Environment.Settings.Toggle then
-						Running = not Running
-
-						if not Running then
-							CancelLock()
-						end
-					else
-						Running = true
-					end
-				end
-			end)
-		end
-	end)
-
-	ServiceConnections.InputEndedConnection = UserInputService.InputEnded:Connect(function(Input)
-		if not Typing then
-			if not Environment.Settings.Toggle then
-				pcall(function()
-					if Input.UserInputType == Enum.UserInputType.Keyboard and Input.KeyCode == Enum.KeyCode[#Environment.Settings.TriggerKey == 1 and stringupper(Environment.Settings.TriggerKey) or Environment.Settings.TriggerKey] or Input.UserInputType == Enum.UserInputType[Environment.Settings.TriggerKey] then
-						Running = false; CancelLock()
-					end
-				end)
-			end
-		end
-	end)
+    -- Store original sensitivity
+    OriginalSensitivity = UserInputService.MouseDeltaSensitivity
+    
+    -- RenderStepped connection
+    ServiceConnections.RenderStepped = RunService.RenderStepped:Connect(function()
+        UpdateFOVCircle()
+        
+        if Running and Environment.Settings.Enabled then
+            GetClosestPlayer()
+            PerformLock()
+        end
+    end)
+    
+    -- Input connections
+    ServiceConnections.InputBegan = UserInputService.InputBegan:Connect(function(Input)
+        HandleInput(Input, true)
+    end)
+    
+    ServiceConnections.InputEnded = UserInputService.InputEnded:Connect(function(Input)
+        HandleInput(Input, false)
+    end)
+    
+    -- Typing connections
+    ServiceConnections.TypingStarted = UserInputService.TextBoxFocused:Connect(function()
+        Typing = true
+    end)
+    
+    ServiceConnections.TypingEnded = UserInputService.TextBoxFocusReleased:Connect(function()
+        Typing = false
+    end)
 end
 
---// Typing Check
-
-ServiceConnections.TypingStartedConnection = UserInputService.TextBoxFocused:Connect(function()
-	Typing = true
-end)
-
-ServiceConnections.TypingEndedConnection = UserInputService.TextBoxFocusReleased:Connect(function()
-	Typing = false
-end)
-
---// Functions
-
-Environment.Functions = {}
-
+--// Public Functions
 function Environment.Functions:Exit()
-	for _, v in next, ServiceConnections do
-		v:Disconnect()
-	end
-
-	Environment.FOVCircle:Remove()
-
-	getgenv().AirHub.Aimbot.Functions = nil
-	getgenv().AirHub.Aimbot = nil
-
-	Load = nil; ConvertVector = nil; CancelLock = nil; GetClosestPlayer = nil;
+    CancelLock()
+    
+    for _, Connection in next, ServiceConnections do
+        Connection:Disconnect()
+    end
+    
+    Environment.FOVCircle:Remove()
+    Environment.Functions = nil
+    getgenv().AirHub.Aimbot = nil
 end
 
 function Environment.Functions:Restart()
-	for _, v in next, ServiceConnections do
-		v:Disconnect()
-	end
-
-	Load()
+    CancelLock()
+    
+    for _, Connection in next, ServiceConnections do
+        Connection:Disconnect()
+    end
+    
+    Load()
 end
 
 function Environment.Functions:ResetSettings()
-	Environment.Settings = {
-		Enabled = false,
-		TeamCheck = false,
-		AliveCheck = true,
-		WallCheck = false,
-		Sensitivity = 0, -- Animation length (in seconds) before fully locking onto target
-		ThirdPerson = false, -- Uses mousemoverel instead of CFrame to support locking in third person (could be choppy)
-		ThirdPersonSensitivity = 3,
-		TriggerKey = "MouseButton2",
-		Toggle = false,
-		LockPart = "Head" -- Body part to lock on
-	}
-
-	Environment.FOVSettings = {
-		Enabled = true,
-		Visible = true,
-		Amount = 90,
-		Color = Color3fromRGB(255, 255, 255),
-		LockedColor = Color3fromRGB(255, 70, 70),
-		Transparency = 0.5,
-		Sides = 60,
-		Thickness = 1,
-		Filled = false
-	}
+    Environment.Settings = {
+        Enabled = false,
+        TeamCheck = false,
+        AliveCheck = true,
+        WallCheck = false,
+        Sensitivity = 0,
+        ThirdPerson = false,
+        ThirdPersonSensitivity = 3,
+        TriggerKey = "MouseButton2",
+        Toggle = false,
+        LockPart = "Head"
+    }
+    
+    Environment.FOVSettings = {
+        Enabled = true,
+        Visible = true,
+        Amount = 90,
+        Color = Color3fromRGB(255, 255, 255),
+        LockedColor = Color3fromRGB(255, 70, 70),
+        Transparency = 0.5,
+        Sides = 60,
+        Thickness = 1,
+        Filled = false
+    }
 end
 
+--// Metatable protection
 setmetatable(Environment.Functions, {
-	__newindex = warn
+    __newindex = function()
+        warn("Cannot modify Aimbot functions table")
+    end
 })
 
---// Load
-
+--// Initialize
 Load()
