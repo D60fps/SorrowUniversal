@@ -35,7 +35,7 @@ local function MakeTab(name)
     local t = {}
     local _tab = MainWindow:CreateTab(name, 4483362458)
     -- Create a default section immediately so elements always have somewhere to go
-    local _curSection = _tab:CreateSection("Settings")
+    local _curSection = _tab:CreateSection("Settings", true)
 
     function t:AddToggle(opts, cb)
         Flags[opts.Flag] = opts.Default or false
@@ -78,7 +78,7 @@ local function MakeTab(name)
 
     function t:AddLabel(text)
         -- Each label becomes a new section header
-        _curSection = _tab:CreateSection(text)
+        _curSection = _tab:CreateSection(text, true)
     end
 
     return t
