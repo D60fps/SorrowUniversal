@@ -1,5 +1,5 @@
 -- Aimbot.lua - Recoded Version
--- Camera & Mouse Aim Support
+-- Camera & Mouse Aim Support with True Mouse Tracking
 
 --// Services
 local RunService = game:GetService("RunService")
@@ -22,13 +22,21 @@ local PCALL = pcall
 local STRING_UPPER = string.upper
 local MATH_CLAMP = math.clamp
 local TICK = tick
+local MATH_ABS = math.abs
+local MATH_FLOOR = math.floor
+local MATH_MIN = math.min
+local MATH_MAX = math.max
 
 --// Module Setup
 local AIRHUB = GENV.AirHub or {}
 if AIRHUB.Aimbot then return end
 
 --// Mouse Movement Compatibility
-local MOUSE_MOVE = (mousemoverel or (Input and Input.MouseMove) or function() end)
+local MOUSE_MOVE = (mousemoverel or (Input and Input.MouseMove) or function(dx, dy)
+    if Input and Input.MouseMove then
+        Input.MouseMove(dx, dy)
+    end
+end)
 
 --// Class: Aimbot
 local Aimbot = {
@@ -37,6 +45,9 @@ local Aimbot = {
         TeamCheck = false,
         AliveCheck = true,
         WallCheck = false,
+        VisibleCheck = false,
+        IgnoreFriends = false,
+        MaxDistance = 1000,
         
         -- Camera Mode Settings
         Camera = {
@@ -44,11 +55,13 @@ local Aimbot = {
             Smoothness = 1, -- Multiplier for camera movement (0-1)
         },
         
-        -- Mouse Mode Settings
+        -- Mouse Mode Settings (True Cursor Tracking)
         Mouse = {
             Speed = 3, -- Mouse movement speed multiplier
             Smoothness = 0.5, -- Smoothing factor (0-1)
             MaxStep = 50, -- Maximum pixels per frame to move
+            Prediction = false, -- Predict target movement
+            PredictionAmount = 0.2, -- How much to predict
         },
         
         -- Common Settings
@@ -56,7 +69,8 @@ local Aimbot = {
         TriggerKey = "MouseButton2",
         Toggle = false,
         LockPart = "Head",
-        ThirdPerson = false, -- Only affects Mouse mode
+        ThirdPerson = false,
+        ThirdPersonOffset = -50, -- Pixels to offset for third person
     },
     
     FOVSettings = {
@@ -71,6 +85,25 @@ local Aimbot = {
         Filled = false
     },
     
+    Triggerbot = {
+        Enabled = false,
+        Key = "MouseButton2",
+        Mode = "Hold", -- "Hold" or "Toggle"
+        Delay = 0,
+        HitPart = "Head",
+        TeamCheck = false,
+        AliveCheck = true,
+        WallCheck = false,
+        FOVCheck = true,
+        FOVAmount = 90,
+        Prediction = 0,
+        ShootKey = "MouseButton1",
+        Silent = false,
+        Toggled = false,
+        Active = false,
+        LastShot = 0,
+    },
+    
     State = {
         Running = false,
         Typing = false,
@@ -80,6 +113,8 @@ local Aimbot = {
         OriginalSensitivity = 0,
         LastTargetPosition = nil,
         CurrentSmoothPosition = nil,
+        TargetVelocity = VECTOR2_NEW(0, 0),
+        LastTargetUpdate = TICK(),
     }
 }
 
@@ -88,14 +123,27 @@ Aimbot.FOVCircle = DRAWING_NEW("Circle")
 Aimbot.FOVCircle.Visible = false
 
 --// Helper Functions
-local function IsTargetValid(target)
+local function IsTargetValid(target, settings)
+    settings = settings or Aimbot.Settings
+    
     if not target or target == LOCAL_PLAYER then return false end
+    
+    -- Friend check
+    if settings.IgnoreFriends and target:IsFriendsWith(LOCAL_PLAYER.UserId) then
+        return false
+    end
     
     local character = target.Character
     if not character then return false end
     
     local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid or humanoid.Health <= 0 then return false end
+    if settings.AliveCheck and (not humanoid or humanoid.Health <= 0) then return false end
+    
+    -- Distance check
+    if settings.MaxDistance and settings.MaxDistance > 0 then
+        local distance = (character:GetPivot().Position - LOCAL_PLAYER.Character:GetPivot().Position).Magnitude
+        if distance > settings.MaxDistance then return false end
+    end
     
     return true
 end
@@ -116,18 +164,39 @@ local function CheckWall(target, part)
     return hit == nil
 end
 
-local function GetTargetScreenPosition(target)
+local function CheckVisible(part)
+    if not Aimbot.Settings.VisibleCheck then return true end
+    
+    local vector, onScreen = CAMERA:WorldToViewportPoint(part.Position)
+    return onScreen
+end
+
+local function GetTargetScreenPosition(target, usePrediction)
     local part = target.Character and target.Character:FindFirstChild(Aimbot.Settings.LockPart)
     if not part then return nil end
     
-    local vector, onScreen = CAMERA:WorldToViewportPoint(part.Position)
-    if not onScreen then return nil end
+    local targetPos = part.Position
+    
+    -- Apply prediction if enabled
+    if usePrediction and Aimbot.Settings.Mouse.Prediction then
+        local humanoid = target.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid and humanoid.MoveDirection.Magnitude > 0 then
+            local rootPart = target.Character:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                local velocity = rootPart.Velocity
+                targetPos = targetPos + velocity * Aimbot.Settings.Mouse.PredictionAmount
+            end
+        end
+    end
+    
+    local vector, onScreen = CAMERA:WorldToViewportPoint(targetPos)
+    if not onScreen and Aimbot.Settings.VisibleCheck then return nil end
     
     return VECTOR2_NEW(vector.X, vector.Y)
 end
 
 local function GetTargetDistance(target)
-    local screenPos = GetTargetScreenPosition(target)
+    local screenPos = GetTargetScreenPosition(target, false)
     if not screenPos then return math.huge end
     
     local mousePos = UserInputService:GetMouseLocation()
@@ -145,7 +214,7 @@ local function FindClosestTarget()
             
             if distance < closestDistance then
                 local part = player.Character[Aimbot.Settings.LockPart]
-                if CheckWall(player, part) then
+                if part and CheckWall(player, part) and CheckVisible(part) then
                     closestDistance = distance
                     closestTarget = player
                 end
@@ -179,6 +248,7 @@ local function CancelLock()
         Aimbot.State.Locked = nil
         Aimbot.State.LastTargetPosition = nil
         Aimbot.State.CurrentSmoothPosition = nil
+        Aimbot.State.TargetVelocity = VECTOR2_NEW(0, 0)
         UserInputService.MouseDeltaSensitivity = Aimbot.State.OriginalSensitivity
         
         if Aimbot.State.Animation then
@@ -214,54 +284,204 @@ local function ApplyCameraAim(target)
     UserInputService.MouseDeltaSensitivity = 0
 end
 
---// Mouse Aim Mode
+--// Mouse Aim Mode (True Cursor Tracking)
 local function ApplyMouseAim(target)
     if not target or not target.Character then return end
     
     local part = target.Character:FindFirstChild(Aimbot.Settings.LockPart)
     if not part then return end
     
-    -- Get target screen position
-    local targetScreenPos = GetTargetScreenPosition(target)
+    -- Get target screen position with prediction
+    local targetScreenPos = GetTargetScreenPosition(target, true)
     if not targetScreenPos then return end
     
     local mousePos = UserInputService:GetMouseLocation()
     local mouseSettings = Aimbot.Settings.Mouse
+    local now = TICK()
+    
+    -- Update target velocity for prediction
+    if Aimbot.State.LastTargetPosition then
+        local dt = now - Aimbot.State.LastTargetUpdate
+        if dt > 0 then
+            local newVelocity = (targetScreenPos - Aimbot.State.LastTargetPosition) / dt
+            Aimbot.State.TargetVelocity = Aimbot.State.TargetVelocity:Lerp(newVelocity, 0.5)
+        end
+    end
+    Aimbot.State.LastTargetPosition = targetScreenPos
+    Aimbot.State.LastTargetUpdate = now
     
     -- Initialize smooth position if needed
     if not Aimbot.State.CurrentSmoothPosition then
         Aimbot.State.CurrentSmoothPosition = mousePos
     end
     
-    -- Calculate target position (with third person adjustment if needed)
+    -- Calculate target position with third person offset
     local targetPos = targetScreenPos
     if Aimbot.Settings.ThirdPerson then
-        -- In third person, we want to aim slightly above for better visibility
-        targetPos = VECTOR2_NEW(targetScreenPos.X, targetScreenPos.Y - 50)
+        targetPos = VECTOR2_NEW(targetScreenPos.X, targetScreenPos.Y + Aimbot.Settings.ThirdPersonOffset)
     end
     
-    -- Calculate movement delta
-    local dx = targetPos.X - Aimbot.State.CurrentSmoothPosition.X
-    local dy = targetPos.Y - Aimbot.State.CurrentSmoothPosition.Y
+    -- Add prediction velocity to target position
+    if mouseSettings.Prediction then
+        targetPos = targetPos + Aimbot.State.TargetVelocity * mouseSettings.PredictionAmount
+    end
     
-    -- Apply smoothing
-    local smoothFactor = MATH_CLAMP(mouseSettings.Smoothness, 0, 1)
-    dx = dx * smoothFactor * mouseSettings.Speed
-    dy = dy * smoothFactor * mouseSettings.Speed
+    -- Calculate movement delta with smoothing
+    local targetDelta = targetPos - Aimbot.State.CurrentSmoothPosition
+    local smoothFactor = MATH_CLAMP(mouseSettings.Smoothness, 0.1, 0.9)
+    
+    -- Apply exponential smoothing
+    Aimbot.State.CurrentSmoothPosition = VECTOR2_NEW(
+        Aimbot.State.CurrentSmoothPosition.X + targetDelta.X * smoothFactor,
+        Aimbot.State.CurrentSmoothPosition.Y + targetDelta.Y * smoothFactor
+    )
+    
+    -- Calculate final movement
+    local dx = (targetPos.X - mousePos.X) * mouseSettings.Speed
+    local dy = (targetPos.Y - mousePos.Y) * mouseSettings.Speed
     
     -- Clamp maximum movement per frame
     dx = MATH_CLAMP(dx, -mouseSettings.MaxStep, mouseSettings.MaxStep)
     dy = MATH_CLAMP(dy, -mouseSettings.MaxStep, mouseSettings.MaxStep)
     
-    -- Update smooth position
-    Aimbot.State.CurrentSmoothPosition = VECTOR2_NEW(
-        Aimbot.State.CurrentSmoothPosition.X + dx,
-        Aimbot.State.CurrentSmoothPosition.Y + dy
-    )
-    
-    -- Apply mouse movement
-    if MATH_CLAMP(math.abs(dx) + math.abs(dy), 0, 1) > 0 then
+    -- Only move if significant
+    if MATH_ABS(dx) + MATH_ABS(dy) > 0.5 then
         MOUSE_MOVE(dx, dy)
+    end
+end
+
+--// Triggerbot Functions
+local function IsTriggerTargetValid(player)
+    if not player or player == LOCAL_PLAYER then return false end
+    
+    if Aimbot.Triggerbot.TeamCheck and player.TeamColor == LOCAL_PLAYER.TeamColor then
+        return false
+    end
+    
+    local character = player.Character
+    if not character then return false end
+    
+    if Aimbot.Triggerbot.AliveCheck then
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then return false end
+    end
+    
+    return true
+end
+
+local function CheckTriggerWall(part)
+    if not Aimbot.Triggerbot.WallCheck then return true end
+    
+    local origin = CAMERA.CFrame.Position
+    local direction = (part.Position - origin).Unit
+    local ray = Ray.new(origin, direction * 1000)
+    local hit = Workspace:FindPartOnRayWithIgnoreList(ray, {LOCAL_PLAYER.Character})
+    
+    return hit == nil
+end
+
+local function GetTriggerTarget()
+    local mousePos = UserInputService:GetMouseLocation()
+    local closestPlayer = nil
+    local closestDistance = Aimbot.Triggerbot.FOVCheck and Aimbot.Triggerbot.FOVAmount or 2000
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if IsTriggerTargetValid(player) and player.Character then
+            local part = player.Character:FindFirstChild(Aimbot.Triggerbot.HitPart)
+            if part then
+                -- Apply prediction
+                local targetPos = part.Position
+                if Aimbot.Triggerbot.Prediction > 0 then
+                    local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
+                    if rootPart then
+                        targetPos = targetPos + rootPart.Velocity * Aimbot.Triggerbot.Prediction
+                    end
+                end
+                
+                local vector, onScreen = CAMERA:WorldToViewportPoint(targetPos)
+                if onScreen then
+                    local distance = (VECTOR2_NEW(vector.X, vector.Y) - mousePos).Magnitude
+                    
+                    if distance < closestDistance then
+                        if CheckTriggerWall(part) then
+                            closestDistance = distance
+                            closestPlayer = player
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    return closestPlayer
+end
+
+local function ShootTarget(target)
+    if not target or not target.Character then return end
+    
+    local part = target.Character:FindFirstChild(Aimbot.Triggerbot.HitPart)
+    if not part then return end
+    
+    -- Check shot delay
+    if TICK() - Aimbot.Triggerbot.LastShot < Aimbot.Triggerbot.Delay then
+        return
+    end
+    
+    Aimbot.Triggerbot.LastShot = TICK()
+    
+    if Aimbot.Triggerbot.Silent then
+        -- Silent aim shot (bypass visual aim)
+        local remote = nil
+        local tool = LOCAL_PLAYER.Character and LOCAL_PLAYER.Character:FindFirstChildOfClass("Tool")
+        
+        if tool then
+            -- Common remote names
+            local remoteNames = {"Remote", "RemoteEvent", "ShootRemote", "FireRemote", "ActivateRemote"}
+            for _, name in ipairs(remoteNames) do
+                remote = tool:FindFirstChild(name) or (tool:FindFirstChild("Handle") and tool.Handle:FindFirstChild(name))
+                if remote then break end
+            end
+        end
+        
+        if remote then
+            -- Create ray arguments
+            local ray = Ray.new(CAMERA.CFrame.Position, (part.Position - CAMERA.CFrame.Position).Unit * 1000)
+            remote:FireServer(ray)
+        end
+    else
+        -- Simulate mouse click
+        local tool = LOCAL_PLAYER.Character and LOCAL_PLAYER.Character:FindFirstChildOfClass("Tool")
+        if tool then
+            tool:Activate()
+        else
+            -- Virtual click
+            mouse1press()
+            task.wait(0.05)
+            mouse1release()
+        end
+    end
+end
+
+--// Triggerbot Loop
+local function TriggerbotLoop()
+    while Aimbot.State.Running do
+        if Aimbot.Triggerbot.Enabled then
+            local shouldShoot = false
+            
+            if Aimbot.Triggerbot.Mode == "Hold" and Aimbot.Triggerbot.Active then
+                shouldShoot = true
+            elseif Aimbot.Triggerbot.Mode == "Toggle" and Aimbot.Triggerbot.Toggled then
+                shouldShoot = true
+            end
+            
+            if shouldShoot then
+                local target = GetTriggerTarget()
+                if target then
+                    ShootTarget(target)
+                end
+            end
+        end
+        RunService.RenderStepped:Wait()
     end
 end
 
@@ -281,7 +501,7 @@ local function HandleRenderStep()
         local target = FindClosestTarget()
         if target then
             Aimbot.State.Locked = target
-            Aimbot.State.LastTargetPosition = TICK()
+            Aimbot.State.LastTargetUpdate = TICK()
         end
         return
     end
@@ -311,6 +531,7 @@ end
 local function HandleInputBegan(input)
     if Aimbot.State.Typing then return end
     
+    -- Aimbot trigger
     local triggerMatch = false
     PCALL(function()
         if input.UserInputType == Enum.UserInputType.Keyboard then
@@ -331,25 +552,62 @@ local function HandleInputBegan(input)
             Aimbot.State.Running = true
         end
     end
+    
+    -- Triggerbot activation
+    local triggerbotMatch = false
+    PCALL(function()
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            triggerbotMatch = input.KeyCode.Name == Aimbot.Triggerbot.Key
+        else
+            triggerbotMatch = input.UserInputType.Name == Aimbot.Triggerbot.Key
+        end
+    end)
+    
+    if triggerbotMatch and Aimbot.Triggerbot.Enabled then
+        if Aimbot.Triggerbot.Mode == "Toggle" then
+            Aimbot.Triggerbot.Toggled = not Aimbot.Triggerbot.Toggled
+        else
+            Aimbot.Triggerbot.Active = true
+        end
+    end
 end
 
 local function HandleInputEnded(input)
-    if Aimbot.State.Typing or Aimbot.Settings.Toggle then return end
+    if Aimbot.State.Typing then return end
     
-    PCALL(function()
-        local triggerMatch = false
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            local keyCode = input.KeyCode.Name
-            triggerMatch = keyCode == STRING_UPPER(Aimbot.Settings.TriggerKey)
-        else
-            triggerMatch = input.UserInputType.Name == Aimbot.Settings.TriggerKey
-        end
-        
-        if triggerMatch then
-            Aimbot.State.Running = false
-            CancelLock()
-        end
-    end)
+    -- Aimbot trigger release
+    if not Aimbot.Settings.Toggle then
+        PCALL(function()
+            local triggerMatch = false
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                local keyCode = input.KeyCode.Name
+                triggerMatch = keyCode == STRING_UPPER(Aimbot.Settings.TriggerKey)
+            else
+                triggerMatch = input.UserInputType.Name == Aimbot.Settings.TriggerKey
+            end
+            
+            if triggerMatch then
+                Aimbot.State.Running = false
+                CancelLock()
+            end
+        end)
+    end
+    
+    -- Triggerbot deactivation
+    if Aimbot.Triggerbot.Mode ~= "Toggle" then
+        PCALL(function()
+            local triggerbotMatch = false
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                triggerbotMatch = input.KeyCode.Name == Aimbot.Triggerbot.Key
+            else
+                triggerbotMatch = input.UserInputType.Name == Aimbot.Triggerbot.Key
+            end
+            
+            if triggerbotMatch then
+                Aimbot.Triggerbot.Active = false
+            end
+        end)
+    end
 end
 
 --// Public API
@@ -359,6 +617,7 @@ function Aimbot.Functions:Start()
     if Aimbot.State.Connections.RenderStepped then return end
     
     Aimbot.State.OriginalSensitivity = UserInputService.MouseDeltaSensitivity
+    Aimbot.State.Running = true
     
     Aimbot.State.Connections.RenderStepped = RunService.RenderStepped:Connect(HandleRenderStep)
     Aimbot.State.Connections.InputBegan = UserInputService.InputBegan:Connect(HandleInputBegan)
@@ -369,6 +628,9 @@ function Aimbot.Functions:Start()
     Aimbot.State.Connections.TypingEnded = UserInputService.TextBoxFocusReleased:Connect(function()
         Aimbot.State.Typing = false
     end)
+    
+    -- Start triggerbot thread
+    task.spawn(TriggerbotLoop)
     
     print("Aimbot started successfully | Mode: " .. Aimbot.Settings.AimMode)
 end
@@ -394,7 +656,15 @@ function Aimbot.Functions:SetMode(mode)
     
     Aimbot.Settings.AimMode = mode
     CancelLock() -- Reset any current lock when switching modes
-    print("Aimbot mode switched to: " .. mode)
+    print("Aimbot mode switched to: " .. mode .. " | Mouse mode now follows cursor")
+end
+
+function Aimbot.Functions:SetTriggerbotSettings(settings)
+    for k, v in pairs(settings) do
+        if Aimbot.Triggerbot[k] ~= nil then
+            Aimbot.Triggerbot[k] = v
+        end
+    end
 end
 
 function Aimbot.Functions:Restart()
@@ -408,6 +678,9 @@ function Aimbot.Functions:ResetSettings()
         TeamCheck = false,
         AliveCheck = true,
         WallCheck = false,
+        VisibleCheck = false,
+        IgnoreFriends = false,
+        MaxDistance = 1000,
         
         Camera = {
             Sensitivity = 0,
@@ -418,6 +691,8 @@ function Aimbot.Functions:ResetSettings()
             Speed = 3,
             Smoothness = 0.5,
             MaxStep = 50,
+            Prediction = false,
+            PredictionAmount = 0.2,
         },
         
         AimMode = "Camera",
@@ -425,6 +700,7 @@ function Aimbot.Functions:ResetSettings()
         Toggle = false,
         LockPart = "Head",
         ThirdPerson = false,
+        ThirdPersonOffset = -50,
     }
     
     Aimbot.FOVSettings = {
@@ -437,6 +713,25 @@ function Aimbot.Functions:ResetSettings()
         Sides = 60,
         Thickness = 1,
         Filled = false
+    }
+    
+    Aimbot.Triggerbot = {
+        Enabled = false,
+        Key = "MouseButton2",
+        Mode = "Hold",
+        Delay = 0,
+        HitPart = "Head",
+        TeamCheck = false,
+        AliveCheck = true,
+        WallCheck = false,
+        FOVCheck = true,
+        FOVAmount = 90,
+        Prediction = 0,
+        ShootKey = "MouseButton1",
+        Silent = false,
+        Toggled = false,
+        Active = false,
+        LastShot = 0,
     }
 end
 
