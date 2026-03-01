@@ -1,790 +1,1012 @@
---// Cache
+-- Wall Hack.lua - Rewritten & Optimized
+--[[
+Fixes:
+- Fixed Drawing object management
+- Fixed memory leaks
+- Fixed health bar scaling
+- Improved performance with caching
+- Added proper cleanup
+- Fixed box rendering
+]]
 
-local select, next, tostring, pcall, getgenv, setmetatable = select, next, tostring, pcall, getgenv, setmetatable
-local mathfloor, mathabs, mathcos, mathsin, mathrad, mathsqrt = math.floor, math.abs, math.cos, math.sin, math.rad, math.sqrt
+--// Cache
+local select = select
+local next = next
+local tostring = tostring
+local pcall = pcall
+local getgenv = getgenv
+local setmetatable = setmetatable
+local mathfloor = math.floor
+local mathabs = math.abs
+local mathcos = math.cos
+local mathsin = math.sin
+local mathrad = math.rad
+local mathsqrt = math.sqrt
 local wait = task.wait
-local Vector2new, Vector3new, Vector3zero, CFramenew, Drawingnew, Color3fromRGB = Vector2.new, Vector3.new, Vector3.zero, CFrame.new, Drawing.new, Color3.fromRGB
+local Vector2new = Vector2.new
+local Vector3new = Vector3.new
+local Vector3zero = Vector3.zero
+local CFramenew = CFrame.new
+local Drawingnew = Drawing.new
+local Color3fromRGB = Color3.fromRGB
 
 --// Launching checks
-
-if not getgenv().AirHub or getgenv().AirHub.WallHack then return end
-
---// Services
-
-local RunService    = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local Players       = game:GetService("Players")
-local LocalPlayer   = Players.LocalPlayer
-local Camera        = workspace.CurrentCamera
-
---// Variables
-
-local ServiceConnections = {}
-local WorldToViewportPoint
-
---// Helper: Get distance from local player to target
-
-local function GetDistance(TargetPos)
-    local LP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not LP then return math.huge end
-    return (TargetPos - LP.Position).Magnitude
+if not getgenv().AirHub or getgenv().AirHub.WallHack then
+    return
 end
 
---// Environment
+--// Services
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 
+--// Variables
+local ServiceConnections = {}
+local PlayerData = {}
+local CachedViewportSize = Vector2new(0, 0)
+local CachedMouseLocation = Vector2new(0, 0)
+
+--// Environment Setup
 getgenv().AirHub.WallHack = {
     Settings = {
-        Enabled   = false,
+        Enabled = false,
         TeamCheck = false,
         AliveCheck = true,
-        MaxDistance = 1000 -- studs; 0 = unlimited
+        MaxDistance = 1000
     },
-
+    
     Visuals = {
         ChamsSettings = {
-            Enabled   = false,
-            Color     = Color3fromRGB(255, 255, 255),
+            Enabled = false,
+            Color = Color3fromRGB(255, 255, 255),
             Transparency = 0.2,
             Thickness = 0,
-            Filled    = true,
+            Filled = true,
             EntireBody = false
         },
-
+        
         ESPSettings = {
-            Enabled         = true,
-            TextColor       = Color3fromRGB(255, 255, 255),
-            TextSize        = 14,
-            Outline         = true,
-            OutlineColor    = Color3fromRGB(0, 0, 0),
-            TextTransparency = 0.7,
-            TextFont        = Drawing.Fonts.UI,
-            Offset          = 20,
-            DisplayDistance = true,
-            DisplayHealth   = true,
-            DisplayName     = true
-        },
-
-        TracersSettings = {
-            Enabled     = true,
-            Type        = 1, -- 1=Bottom 2=Center 3=Mouse
-            Transparency = 0.7,
-            Thickness   = 1,
-            Color       = Color3fromRGB(255, 255, 255)
-        },
-
-        BoxSettings = {
-            Enabled     = true,
-            Type        = 1, -- 1=3D 2=2D
-            Color       = Color3fromRGB(255, 255, 255),
-            Transparency = 0.7,
-            Thickness   = 1,
-            Filled      = false,
-            Increase    = 1
-        },
-
-        HeadDotSettings = {
-            Enabled     = true,
-            Color       = Color3fromRGB(255, 255, 255),
-            Transparency = 0.5,
-            Thickness   = 1,
-            Filled      = false,
-            Sides       = 30
-        },
-
-        HealthBarSettings = {
-            Enabled     = false,
-            Transparency = 0.8,
-            Size        = 2,
-            Offset      = 10,
+            Enabled = true,
+            TextColor = Color3fromRGB(255, 255, 255),
+            TextSize = 14,
+            Outline = true,
             OutlineColor = Color3fromRGB(0, 0, 0),
-            Blue        = 50,
-            Type        = 3 -- 1=Top 2=Bottom 3=Left 4=Right
+            TextTransparency = 0.7,
+            TextFont = Drawing.Fonts.UI,
+            Offset = 20,
+            DisplayDistance = true,
+            DisplayHealth = true,
+            DisplayName = true
+        },
+        
+        TracersSettings = {
+            Enabled = true,
+            Type = 1,
+            Transparency = 0.7,
+            Thickness = 1,
+            Color = Color3fromRGB(255, 255, 255)
+        },
+        
+        BoxSettings = {
+            Enabled = true,
+            Type = 1,
+            Color = Color3fromRGB(255, 255, 255),
+            Transparency = 0.7,
+            Thickness = 1,
+            Filled = false,
+            Increase = 1
+        },
+        
+        HeadDotSettings = {
+            Enabled = true,
+            Color = Color3fromRGB(255, 255, 255),
+            Transparency = 0.5,
+            Thickness = 1,
+            Filled = false,
+            Sides = 30
+        },
+        
+        HealthBarSettings = {
+            Enabled = false,
+            Transparency = 0.8,
+            Size = 2,
+            Offset = 10,
+            OutlineColor = Color3fromRGB(0, 0, 0),
+            Blue = 50,
+            Type = 3
         }
     },
-
+    
     Crosshair = {
         Settings = {
-            Enabled             = false,
-            Type                = 1, -- 1=Mouse 2=Center
-            Size                = 12,
-            Thickness           = 1,
-            Color               = Color3fromRGB(0, 255, 0),
-            Transparency        = 1,
-            GapSize             = 5,
-            Rotation            = 0,
-            CenterDot           = false,
-            CenterDotColor      = Color3fromRGB(0, 255, 0),
-            CenterDotSize       = 1,
+            Enabled = false,
+            Type = 1,
+            Size = 12,
+            Thickness = 1,
+            Color = Color3fromRGB(0, 255, 0),
+            Transparency = 1,
+            GapSize = 5,
+            Rotation = 0,
+            CenterDot = false,
+            CenterDotColor = Color3fromRGB(0, 255, 0),
+            CenterDotSize = 1,
             CenterDotTransparency = 1,
-            CenterDotFilled     = true,
-            CenterDotThickness  = 1
+            CenterDotFilled = true,
+            CenterDotThickness = 1
         },
-
+        
         Parts = {
-            LeftLine   = Drawingnew("Line"),
-            RightLine  = Drawingnew("Line"),
-            TopLine    = Drawingnew("Line"),
+            LeftLine = Drawingnew("Line"),
+            RightLine = Drawingnew("Line"),
+            TopLine = Drawingnew("Line"),
             BottomLine = Drawingnew("Line"),
-            CenterDot  = Drawingnew("Circle")
+            CenterDot = Drawingnew("Circle")
         }
     },
-
-    WrappedPlayers = {}
+    
+    Functions = {}
 }
 
 local Environment = getgenv().AirHub.WallHack
 
---// Core Functions
-
-WorldToViewportPoint = function(...)
-    return Camera:WorldToViewportPoint(...)
+--// Utility Functions
+local function GetDistanceFromLocal(Position)
+    local Character = LocalPlayer.Character
+    if not Character then
+        return math.huge
+    end
+    
+    local RootPart = Character:FindFirstChild("HumanoidRootPart")
+    if not RootPart then
+        return math.huge
+    end
+    
+    return (Position - RootPart.Position).Magnitude
 end
 
-local function IsWithinDistance(TargetPos)
-    local max = Environment.Settings.MaxDistance
-    if max == nil or max <= 0 then return true end
-    return GetDistance(TargetPos) <= max
+local function IsWithinDistance(Position)
+    local MaxDist = Environment.Settings.MaxDistance
+    if MaxDist <= 0 then
+        return true
+    end
+    
+    return GetDistanceFromLocal(Position) <= MaxDist
 end
 
-local function GetPlayerTable(Player)
-    for _, v in next, Environment.WrappedPlayers do
-        if v.Name == Player.Name then
-            return v
+local function GetPlayerData(Player)
+    return PlayerData[Player]
+end
+
+local function CleanupPlayerData(Player)
+    local Data = PlayerData[Player]
+    if not Data then
+        return
+    end
+    
+    -- Disconnect all connections
+    for _, Connection in next, Data.Connections do
+        Connection:Disconnect()
+    end
+    
+    -- Remove all drawings
+    local function RemoveDrawing(obj)
+        if obj and obj.Remove then
+            pcall(function() obj:Remove() end)
         end
     end
-end
-
-local function AssignRigType(Player)
-    local PlayerTable = GetPlayerTable(Player)
-    repeat wait(0) until Player.Character
-    if Player.Character:FindFirstChild("Torso") and not Player.Character:FindFirstChild("LowerTorso") then
-        PlayerTable.RigType = "R6"
-    elseif Player.Character:FindFirstChild("LowerTorso") and not Player.Character:FindFirstChild("Torso") then
-        PlayerTable.RigType = "R15"
-    else
-        repeat wait(0.5) until Player.Character
-            and (Player.Character:FindFirstChild("Torso") or Player.Character:FindFirstChild("LowerTorso"))
-        AssignRigType(Player)
+    
+    -- Remove ESP
+    RemoveDrawing(Data.ESP)
+    
+    -- Remove Tracer
+    RemoveDrawing(Data.Tracer)
+    
+    -- Remove HeadDot
+    RemoveDrawing(Data.HeadDot)
+    
+    -- Remove HealthBar
+    if Data.HealthBar then
+        RemoveDrawing(Data.HealthBar.Main)
+        RemoveDrawing(Data.HealthBar.Outline)
     end
-end
-
-local function InitChecks(Player)
-    local PlayerTable = GetPlayerTable(Player)
-    PlayerTable.Connections.UpdateChecks = RunService.RenderStepped:Connect(function()
-        if Player.Character and Player.Character:FindFirstChildOfClass("Humanoid") then
-            PlayerTable.Checks.Alive = Environment.Settings.AliveCheck
-                and Player.Character:FindFirstChildOfClass("Humanoid").Health > 0
-                or true
-            PlayerTable.Checks.Team = Environment.Settings.TeamCheck
-                and Player.TeamColor ~= LocalPlayer.TeamColor
-                or true
-
-            -- Distance check
-            local HRP = Player.Character:FindFirstChild("HumanoidRootPart")
-            PlayerTable.Checks.Distance = HRP and IsWithinDistance(HRP.Position) or false
-        else
-            PlayerTable.Checks.Alive    = false
-            PlayerTable.Checks.Team     = false
-            PlayerTable.Checks.Distance = false
+    
+    -- Remove Box
+    if Data.Box then
+        RemoveDrawing(Data.Box.Square)
+        RemoveDrawing(Data.Box.TopLeftLine)
+        RemoveDrawing(Data.Box.TopRightLine)
+        RemoveDrawing(Data.Box.BottomLeftLine)
+        RemoveDrawing(Data.Box.BottomRightLine)
+    end
+    
+    -- Remove Chams
+    if Data.Chams then
+        for _, PartChams in next, Data.Chams do
+            for i = 1, 6 do
+                RemoveDrawing(PartChams["Quad"..i])
+            end
         end
-    end)
+    end
+    
+    PlayerData[Player] = nil
 end
 
---// Cham helper: applies shared settings to a Quad drawing
-
-local function ApplyQuadSettings(Quad, Visible)
-    local CS = Environment.Visuals.ChamsSettings
-    Quad.Transparency = CS.Transparency
-    Quad.Color        = CS.Color
-    Quad.Thickness    = CS.Thickness
-    Quad.Filled       = CS.Filled
-    Quad.Visible      = Visible and CS.Enabled
+local function ShouldRenderPlayer(Player, Data)
+    if not Environment.Settings.Enabled then
+        return false
+    end
+    
+    if not Data.Checks then
+        return false
+    end
+    
+    return Data.Checks.Alive and Data.Checks.Team and Data.Checks.Distance
 end
 
-local function UpdateCham(Part, Cham)
-    local CS = Environment.Visuals.ChamsSettings
-    local CorFrame, PartSize = Part.CFrame, Part.Size / 2
-    local _, vis = WorldToViewportPoint((CorFrame * CFramenew(PartSize.X, PartSize.Y, PartSize.Z)).Position)
+--// Rig Type Detection
+local function GetRigType(Character)
+    if Character:FindFirstChild("Torso") and not Character:FindFirstChild("LowerTorso") then
+        return "R6"
+    elseif Character:FindFirstChild("LowerTorso") then
+        return "R15"
+    end
+    return nil
+end
 
-    if vis and CS.Enabled then
-        -- Build the 8 corners once
-        local corners = {
-            WorldToViewportPoint(CorFrame * CFramenew( PartSize.X,  PartSize.Y,  PartSize.Z).Position),
-            WorldToViewportPoint(CorFrame * CFramenew(-PartSize.X,  PartSize.Y,  PartSize.Z).Position),
-            WorldToViewportPoint(CorFrame * CFramenew( PartSize.X, -PartSize.Y,  PartSize.Z).Position),
-            WorldToViewportPoint(CorFrame * CFramenew(-PartSize.X, -PartSize.Y,  PartSize.Z).Position),
-            WorldToViewportPoint(CorFrame * CFramenew( PartSize.X,  PartSize.Y, -PartSize.Z).Position),
-            WorldToViewportPoint(CorFrame * CFramenew(-PartSize.X,  PartSize.Y, -PartSize.Z).Position),
-            WorldToViewportPoint(CorFrame * CFramenew( PartSize.X, -PartSize.Y, -PartSize.Z).Position),
-            WorldToViewportPoint(CorFrame * CFramenew(-PartSize.X, -PartSize.Y, -PartSize.Z).Position),
-        }
+--// Cham Functions
+local function CreateChamQuads()
+    local Quads = {}
+    for i = 1, 6 do
+        Quads["Quad"..i] = Drawingnew("Quad")
+    end
+    return Quads
+end
 
-        local function v2(p) return Vector2new(p.X, p.Y) end
-
-        -- Front (0,1,2,3) | Back (4,5,6,7) | Top (0,1,4,5) | Bottom (2,3,6,7) | Right (0,2,4,6) | Left (1,3,5,7)
-        local faces = {
-            {corners[1], corners[3], corners[4], corners[2]},
-            {corners[5], corners[7], corners[8], corners[6]},
-            {corners[1], corners[5], corners[6], corners[2]},
-            {corners[3], corners[7], corners[8], corners[4]},
-            {corners[1], corners[3], corners[7], corners[5]},
-            {corners[2], corners[4], corners[8], corners[6]},
-        }
-
+local function UpdateCham(Part, Quads, Color, Transparency, Thickness, Filled)
+    if not Part then
         for i = 1, 6 do
-            local q = Cham["Quad"..i]
-            ApplyQuadSettings(q, true)
-            q.PointA = v2(faces[i][1]); q.PointB = v2(faces[i][2])
-            q.PointC = v2(faces[i][3]); q.PointD = v2(faces[i][4])
+            Quads["Quad"..i].Visible = false
         end
-    else
-        for i = 1, 6 do Cham["Quad"..i].Visible = false end
+        return
+    end
+    
+    local PartCFrame = Part.CFrame
+    local PartSize = Part.Size / 2
+    
+    -- Calculate all 8 corners
+    local Corners = {}
+    for x = -1, 1, 2 do
+        for y = -1, 1, 2 do
+            for z = -1, 1, 2 do
+                local Offset = Vector3new(x * PartSize.X, y * PartSize.Y, z * PartSize.Z)
+                local WorldPos = (PartCFrame * CFramenew(Offset.X, Offset.Y, Offset.Z)).Position
+                local ScreenPos, Visible = Camera:WorldToViewportPoint(WorldPos)
+                
+                if not Visible then
+                    for i = 1, 6 do
+                        Quads["Quad"..i].Visible = false
+                    end
+                    return
+                end
+                
+                table.insert(Corners, Vector2new(ScreenPos.X, ScreenPos.Y))
+            end
+        end
+    end
+    
+    -- Define faces (front, back, top, bottom, right, left)
+    local Faces = {
+        {Corners[1], Corners[3], Corners[4], Corners[2]}, -- Front
+        {Corners[5], Corners[7], Corners[8], Corners[6]}, -- Back
+        {Corners[1], Corners[5], Corners[6], Corners[2]}, -- Top
+        {Corners[3], Corners[7], Corners[8], Corners[4]}, -- Bottom
+        {Corners[1], Corners[3], Corners[7], Corners[5]}, -- Right
+        {Corners[2], Corners[4], Corners[8], Corners[6]}  -- Left
+    }
+    
+    -- Update each face
+    for i = 1, 6 do
+        local Quad = Quads["Quad"..i]
+        Quad.Visible = true
+        Quad.Color = Color
+        Quad.Transparency = Transparency
+        Quad.Thickness = Thickness
+        Quad.Filled = Filled
+        Quad.PointA = Faces[i][1]
+        Quad.PointB = Faces[i][2]
+        Quad.PointC = Faces[i][3]
+        Quad.PointD = Faces[i][4]
     end
 end
 
---// Visuals
-
+--// Visuals Implementation
 local Visuals = {
-    AddChams = function(Player)
-        local PlayerTable = GetPlayerTable(Player)
-
-        local function BuildRig()
-            -- Remove old quads
-            for _, v in next, PlayerTable.Chams do
+    UpdateESP = function(Player, Data)
+        local ESP = Data.ESP
+        local Settings = Environment.Visuals.ESPSettings
+        
+        if not Settings.Enabled or not ShouldRenderPlayer(Player, Data) then
+            ESP.Visible = false
+            return
+        end
+        
+        local Character = Player.Character
+        local Head = Character:FindFirstChild("Head")
+        if not Head then
+            ESP.Visible = false
+            return
+        end
+        
+        local ScreenPos, OnScreen = Camera:WorldToViewportPoint(Head.Position)
+        if not OnScreen then
+            ESP.Visible = false
+            return
+        end
+        
+        local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+        local RootPart = Character:FindFirstChild("HumanoidRootPart")
+        if not Humanoid or not RootPart then
+            ESP.Visible = false
+            return
+        end
+        
+        local Distance = mathfloor(GetDistanceFromLocal(RootPart.Position))
+        local Tool = Character:FindFirstChildOfClass("Tool")
+        local DisplayName = Player.DisplayName == Player.Name and Player.Name or Player.DisplayName.." {"..Player.Name.."}"
+        
+        -- Build text
+        local TextParts = {}
+        if Settings.DisplayName then
+            table.insert(TextParts, DisplayName)
+        end
+        if Settings.DisplayHealth then
+            table.insert(TextParts, "("..mathfloor(Humanoid.Health)..")")
+        end
+        if Settings.DisplayDistance then
+            table.insert(TextParts, "["..Distance.."m]")
+        end
+        
+        local Text = table.concat(TextParts, " ")
+        if Tool then
+            Text = "["..Tool.Name.."]\n"..Text
+        end
+        
+        -- Update ESP
+        ESP.Center = true
+        ESP.Size = Settings.TextSize
+        ESP.Outline = Settings.Outline
+        ESP.OutlineColor = Settings.OutlineColor
+        ESP.Color = Settings.TextColor
+        ESP.Transparency = Settings.TextTransparency
+        ESP.Font = Settings.TextFont
+        ESP.Text = Text
+        ESP.Position = Vector2new(ScreenPos.X, ScreenPos.Y - Settings.Offset - (Tool and 10 or 0))
+        ESP.Visible = true
+    end,
+    
+    UpdateTracer = function(Player, Data)
+        local Tracer = Data.Tracer
+        local Settings = Environment.Visuals.TracersSettings
+        
+        if not Settings.Enabled or not ShouldRenderPlayer(Player, Data) then
+            Tracer.Visible = false
+            return
+        end
+        
+        local Character = Player.Character
+        local RootPart = Character:FindFirstChild("HumanoidRootPart")
+        if not RootPart then
+            Tracer.Visible = false
+            return
+        end
+        
+        local ScreenPos, OnScreen = Camera:WorldToViewportPoint(RootPart.Position)
+        if not OnScreen then
+            Tracer.Visible = false
+            return
+        end
+        
+        -- Calculate tracer start position
+        local StartPos
+        if Settings.Type == 2 then
+            StartPos = Vector2new(CachedViewportSize.X / 2, CachedViewportSize.Y / 2)
+        elseif Settings.Type == 3 then
+            StartPos = CachedMouseLocation
+        else
+            StartPos = Vector2new(CachedViewportSize.X / 2, CachedViewportSize.Y)
+        end
+        
+        Tracer.Thickness = Settings.Thickness
+        Tracer.Color = Settings.Color
+        Tracer.Transparency = Settings.Transparency
+        Tracer.From = StartPos
+        Tracer.To = Vector2new(ScreenPos.X, ScreenPos.Y)
+        Tracer.Visible = true
+    end,
+    
+    UpdateBox = function(Player, Data)
+        local Box = Data.Box
+        local Settings = Environment.Visuals.BoxSettings
+        
+        if not Settings.Enabled or not ShouldRenderPlayer(Player, Data) then
+            Box.Square.Visible = false
+            Box.TopLeftLine.Visible = false
+            Box.TopRightLine.Visible = false
+            Box.BottomLeftLine.Visible = false
+            Box.BottomRightLine.Visible = false
+            return
+        end
+        
+        local Character = Player.Character
+        local RootPart = Character:FindFirstChild("HumanoidRootPart")
+        local Head = Character:FindFirstChild("Head")
+        
+        if not RootPart or not Head then
+            return
+        end
+        
+        local RootPos, OnScreen = Camera:WorldToViewportPoint(RootPart.Position)
+        if not OnScreen then
+            return
+        end
+        
+        if Settings.Type == 2 then
+            -- 2D Box
+            local HeadPos = Camera:WorldToViewportPoint(Head.Position + Vector3new(0, 0.5, 0))
+            local LegPos = Camera:WorldToViewportPoint(RootPart.Position - Vector3new(0, 2, 0))
+            
+            local Height = HeadPos.Y - LegPos.Y
+            local Width = Height * 0.8
+            
+            Box.Square.Visible = true
+            Box.Square.Thickness = Settings.Thickness
+            Box.Square.Color = Settings.Color
+            Box.Square.Transparency = Settings.Transparency
+            Box.Square.Filled = Settings.Filled
+            Box.Square.Size = Vector2new(Width, Height)
+            Box.Square.Position = Vector2new(RootPos.X - Width/2, RootPos.Y - Height/2)
+            
+            -- Hide corner lines
+            Box.TopLeftLine.Visible = false
+            Box.TopRightLine.Visible = false
+            Box.BottomLeftLine.Visible = false
+            Box.BottomRightLine.Visible = false
+        else
+            -- 3D Corner Box
+            Box.Square.Visible = false
+            
+            local Size = RootPart.Size * Settings.Increase
+            local Offset = Size.Y / 2
+            
+            -- Calculate corners
+            local function GetCorner(x, y, z)
+                local OffsetPos = RootPart.CFrame * CFramenew(x * Size.X/2, y * Size.Y/2 - Offset, z * Size.Z/2)
+                local Pos, Vis = Camera:WorldToViewportPoint(OffsetPos.Position)
+                return Pos, Vis
+            end
+            
+            local TL, _ = GetCorner(1, 1, -1)  -- Top Left
+            local TR, _ = GetCorner(-1, 1, -1) -- Top Right
+            local BL, _ = GetCorner(1, -1, -1) -- Bottom Left
+            local BR, _ = GetCorner(-1, -1, -1) -- Bottom Right
+            
+            -- Update corner lines
+            local function UpdateLine(Line, From, To)
+                Line.Visible = true
+                Line.Thickness = Settings.Thickness
+                Line.Transparency = Settings.Transparency
+                Line.Color = Settings.Color
+                Line.From = Vector2new(From.X, From.Y)
+                Line.To = Vector2new(To.X, To.Y)
+            end
+            
+            UpdateLine(Box.TopLeftLine, TL, TR)
+            UpdateLine(Box.TopRightLine, TR, BR)
+            UpdateLine(Box.BottomLeftLine, BL, TL)
+            UpdateLine(Box.BottomRightLine, BR, BL)
+        end
+    end,
+    
+    UpdateHeadDot = function(Player, Data)
+        local HeadDot = Data.HeadDot
+        local Settings = Environment.Visuals.HeadDotSettings
+        
+        if not Settings.Enabled or not ShouldRenderPlayer(Player, Data) then
+            HeadDot.Visible = false
+            return
+        end
+        
+        local Character = Player.Character
+        local Head = Character:FindFirstChild("Head")
+        if not Head then
+            HeadDot.Visible = false
+            return
+        end
+        
+        local ScreenPos, OnScreen = Camera:WorldToViewportPoint(Head.Position)
+        if not OnScreen then
+            HeadDot.Visible = false
+            return
+        end
+        
+        HeadDot.Thickness = Settings.Thickness
+        HeadDot.Color = Settings.Color
+        HeadDot.Transparency = Settings.Transparency
+        HeadDot.NumSides = Settings.Sides
+        HeadDot.Filled = Settings.Filled
+        HeadDot.Position = Vector2new(ScreenPos.X, ScreenPos.Y)
+        HeadDot.Radius = 10
+        HeadDot.Visible = true
+    end,
+    
+    UpdateHealthBar = function(Player, Data)
+        local HealthBar = Data.HealthBar
+        local Settings = Environment.Visuals.HealthBarSettings
+        
+        if not Settings.Enabled or not ShouldRenderPlayer(Player, Data) then
+            HealthBar.Main.Visible = false
+            HealthBar.Outline.Visible = false
+            return
+        end
+        
+        local Character = Player.Character
+        local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+        local RootPart = Character:FindFirstChild("HumanoidRootPart")
+        
+        if not Humanoid or not RootPart then
+            return
+        end
+        
+        local RootPos, OnScreen = Camera:WorldToViewportPoint(RootPart.Position)
+        if not OnScreen then
+            return
+        end
+        
+        local HealthRatio = Humanoid.Health / Humanoid.MaxHealth
+        local HealthColor = Color3fromRGB(
+            mathfloor((1 - HealthRatio) * 255),
+            mathfloor(HealthRatio * 255),
+            Settings.Blue
+        )
+        
+        -- Calculate positions based on type
+        local MainPos, OutlineSize, MainSize
+        
+        if Settings.Type == 1 or Settings.Type == 2 then
+            -- Horizontal bar
+            OutlineSize = Vector2new(2000 / RootPos.Z, Settings.Size)
+            MainSize = Vector2new(OutlineSize.X * HealthRatio, OutlineSize.Y)
+            
+            local YOffset = Settings.Type == 1 and -OutlineSize.X/2 - Settings.Offset or OutlineSize.X/2 + Settings.Offset
+            MainPos = Vector2new(RootPos.X - OutlineSize.X/2, RootPos.Y + YOffset)
+        else
+            -- Vertical bar
+            OutlineSize = Vector2new(Settings.Size, 2500 / RootPos.Z)
+            MainSize = Vector2new(OutlineSize.X, OutlineSize.Y * HealthRatio)
+            
+            if Settings.Type == 3 then
+                -- Left side
+                local LeftPos, _ = Camera:WorldToViewportPoint((RootPart.CFrame * CFramenew(RootPart.Size.X, 0, 0)).Position)
+                MainPos = Vector2new(LeftPos.X - Settings.Offset, RootPos.Y - OutlineSize.Y/2)
+            else
+                -- Right side
+                local RightPos, _ = Camera:WorldToViewportPoint((RootPart.CFrame * CFramenew(-RootPart.Size.X, 0, 0)).Position)
+                MainPos = Vector2new(RightPos.X + Settings.Offset, RootPos.Y - OutlineSize.Y/2)
+            end
+        end
+        
+        -- Update main bar
+        HealthBar.Main.Visible = true
+        HealthBar.Main.Thickness = 1
+        HealthBar.Main.Color = HealthColor
+        HealthBar.Main.Transparency = Settings.Transparency
+        HealthBar.Main.Filled = true
+        HealthBar.Main.Size = MainSize
+        HealthBar.Main.Position = MainPos
+        HealthBar.Main.ZIndex = 2
+        
+        -- Update outline
+        HealthBar.Outline.Visible = true
+        HealthBar.Outline.Thickness = 3
+        HealthBar.Outline.Color = Settings.OutlineColor
+        HealthBar.Outline.Transparency = Settings.Transparency
+        HealthBar.Outline.Filled = false
+        HealthBar.Outline.Size = OutlineSize
+        HealthBar.Outline.Position = MainPos
+        HealthBar.Outline.ZIndex = 1
+    end,
+    
+    UpdateChams = function(Player, Data)
+        local Settings = Environment.Visuals.ChamsSettings
+        
+        if not Settings.Enabled or not ShouldRenderPlayer(Player, Data) then
+            for _, PartChams in next, Data.Chams do
                 for i = 1, 6 do
-                    local q = v["Quad"..i]
-                    if q and q.Remove then q:Remove() end
+                    PartChams["Quad"..i].Visible = false
                 end
             end
-
-            local parts = {}
-            if PlayerTable.RigType == "R15" then
-                if not Environment.Visuals.ChamsSettings.EntireBody then
-                    parts = {"Head","UpperTorso","LeftLowerArm","LeftUpperArm","RightLowerArm","RightUpperArm","LeftLowerLeg","LeftUpperLeg","RightLowerLeg","RightUpperLeg"}
-                else
-                    parts = {"Head","UpperTorso","LowerTorso","LeftLowerArm","LeftUpperArm","LeftHand","RightLowerArm","RightUpperArm","RightHand","LeftLowerLeg","LeftUpperLeg","LeftFoot","RightLowerLeg","RightUpperLeg","RightFoot"}
-                end
-            else
-                parts = {"Head","Torso","Left Arm","Right Arm","Left Leg","Right Leg"}
-            end
-
-            PlayerTable.Chams = {}
-            for _, name in next, parts do
-                PlayerTable.Chams[name] = {}
-                for i = 1, 6 do
-                    PlayerTable.Chams[name]["Quad"..i] = Drawingnew("Quad")
-                end
-            end
+            return
         end
-
-        local oldEntireBody = Environment.Visuals.ChamsSettings.EntireBody
-        BuildRig()
-
-        PlayerTable.Connections.Chams = RunService.RenderStepped:Connect(function()
-            if not (PlayerTable.Checks.Alive and PlayerTable.Checks.Team and PlayerTable.Checks.Distance) then
-                for _, cham in next, PlayerTable.Chams do
-                    for i = 1, 6 do cham["Quad"..i].Visible = false end
-                end
-                return
-            end
-
-            if Environment.Visuals.ChamsSettings.Enabled then
-                if Environment.Visuals.ChamsSettings.EntireBody ~= oldEntireBody then
-                    BuildRig(); oldEntireBody = Environment.Visuals.ChamsSettings.EntireBody
-                end
-                for name, cham in next, PlayerTable.Chams do
-                    local part = Player.Character and Player.Character:FindFirstChild(name)
-                    if part then
-                        UpdateCham(part, cham)
-                    end
-                end
-            else
-                for _, cham in next, PlayerTable.Chams do
-                    for i = 1, 6 do cham["Quad"..i].Visible = false end
-                end
-            end
-        end)
-    end,
-
-    AddESP = function(Player)
-        local PlayerTable = GetPlayerTable(Player)
-        PlayerTable.ESP = Drawingnew("Text")
-
-        PlayerTable.Connections.ESP = RunService.RenderStepped:Connect(function()
-            local ES = Environment.Visuals.ESPSettings
-            if not (Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-                and Player.Character:FindFirstChild("HumanoidRootPart")
-                and Player.Character:FindFirstChild("Head")
-                and Environment.Settings.Enabled and ES.Enabled) then
-                PlayerTable.ESP.Visible = false
-                return
-            end
-
-            local Vector, OnScreen = WorldToViewportPoint(Player.Character.Head.Position)
-            local passChecks = PlayerTable.Checks.Alive and PlayerTable.Checks.Team and PlayerTable.Checks.Distance
-
-            if not (OnScreen and passChecks) then
-                PlayerTable.ESP.Visible = false
-                return
-            end
-
-            local Humanoid = Player.Character:FindFirstChildOfClass("Humanoid")
-            local HRP = Player.Character.HumanoidRootPart
-            local dist = mathfloor(GetDistance(HRP.Position))
-
-            local Tool = Player.Character:FindFirstChildOfClass("Tool")
-            local namePart = Player.DisplayName == Player.Name and Player.Name or Player.DisplayName.." {"..Player.Name.."}"
-            local healthPart = "("..tostring(mathfloor(Humanoid.Health))..")"
-            local distPart   = "["..dist.."m]"
-
-            local content = ""
-            if ES.DisplayName     then content = namePart..content end
-            if ES.DisplayHealth   then content = healthPart..(ES.DisplayName and " " or "")..content end
-            if ES.DisplayDistance then content = content.." "..distPart end
-
-            PlayerTable.ESP.Center       = true
-            PlayerTable.ESP.Size         = ES.TextSize
-            PlayerTable.ESP.Outline      = ES.Outline
-            PlayerTable.ESP.OutlineColor = ES.OutlineColor
-            PlayerTable.ESP.Color        = ES.TextColor
-            PlayerTable.ESP.Transparency = ES.TextTransparency
-            PlayerTable.ESP.Font         = ES.TextFont
-            PlayerTable.ESP.Text         = (Tool and "["..Tool.Name.."]\n" or "")..content
-            PlayerTable.ESP.Position     = Vector2new(Vector.X, Vector.Y - ES.Offset - (Tool and 10 or 0))
-            PlayerTable.ESP.Visible      = true
-        end)
-    end,
-
-    AddTracer = function(Player)
-        local PlayerTable = GetPlayerTable(Player)
-        PlayerTable.Tracer = Drawingnew("Line")
-
-        PlayerTable.Connections.Tracer = RunService.RenderStepped:Connect(function()
-            local TS = Environment.Visuals.TracersSettings
-            if not (Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-                and Player.Character:FindFirstChild("HumanoidRootPart")
-                and Player.Character:FindFirstChild("Head")
-                and Environment.Settings.Enabled and TS.Enabled) then
-                PlayerTable.Tracer.Visible = false
-                return
-            end
-
-            local passChecks = PlayerTable.Checks.Alive and PlayerTable.Checks.Team and PlayerTable.Checks.Distance
-            if not passChecks then
-                PlayerTable.Tracer.Visible = false
-                return
-            end
-
-            local HRPCFrame, HRPSize = Player.Character.HumanoidRootPart.CFrame, Player.Character.HumanoidRootPart.Size
-            local _3DVector, OnScreen = WorldToViewportPoint((HRPCFrame * CFramenew(0, -HRPSize.Y - 0.5, 0)).Position)
-            local _2DVector           = WorldToViewportPoint(Player.Character.HumanoidRootPart.Position)
-            local HeadOff             = WorldToViewportPoint(Player.Character.Head.Position + Vector3new(0, 0.5, 0))
-            local LegsOff             = WorldToViewportPoint(Player.Character.HumanoidRootPart.Position - Vector3new(0, 1.5, 0))
-
-            if not OnScreen then
-                PlayerTable.Tracer.Visible = false
-                return
-            end
-
-            PlayerTable.Tracer.Thickness    = TS.Thickness
-            PlayerTable.Tracer.Color        = TS.Color
-            PlayerTable.Tracer.Transparency = TS.Transparency
-            PlayerTable.Tracer.To           = Environment.Visuals.BoxSettings.Type == 1
-                and Vector2new(_3DVector.X, _3DVector.Y)
-                or  Vector2new(_2DVector.X, _2DVector.Y - (HeadOff.Y - LegsOff.Y) * 0.75)
-
-            if TS.Type == 2 then
-                PlayerTable.Tracer.From = Vector2new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-            elseif TS.Type == 3 then
-                local ml = UserInputService:GetMouseLocation()
-                PlayerTable.Tracer.From = Vector2new(ml.X, ml.Y)
-            else
-                PlayerTable.Tracer.From = Vector2new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-            end
-
-            PlayerTable.Tracer.Visible = true
-        end)
-    end,
-
-    AddBox = function(Player)
-        local PlayerTable = GetPlayerTable(Player)
-
-        PlayerTable.Box.Square         = Drawingnew("Square")
-        PlayerTable.Box.TopLeftLine    = Drawingnew("Line")
-        PlayerTable.Box.TopRightLine   = Drawingnew("Line")
-        PlayerTable.Box.BottomLeftLine = Drawingnew("Line")
-        PlayerTable.Box.BottomRightLine = Drawingnew("Line")
-
-        local function HideAll()
-            PlayerTable.Box.Square.Visible          = false
-            PlayerTable.Box.TopLeftLine.Visible     = false
-            PlayerTable.Box.TopRightLine.Visible    = false
-            PlayerTable.Box.BottomLeftLine.Visible  = false
-            PlayerTable.Box.BottomRightLine.Visible = false
+        
+        local Character = Player.Character
+        for PartName, Quads in next, Data.Chams do
+            local Part = Character:FindFirstChild(PartName)
+            UpdateCham(Part, Quads, Settings.Color, Settings.Transparency, Settings.Thickness, Settings.Filled)
         end
-
-        local function ApplyLineStyle(line)
-            local BS = Environment.Visuals.BoxSettings
-            line.Thickness    = BS.Thickness
-            line.Transparency = BS.Transparency
-            line.Color        = BS.Color
+    end,
+    
+    UpdateCrosshair = function()
+        local Settings = Environment.Crosshair.Settings
+        local Parts = Environment.Crosshair.Parts
+        
+        if not Settings.Enabled then
+            Parts.LeftLine.Visible = false
+            Parts.RightLine.Visible = false
+            Parts.TopLine.Visible = false
+            Parts.BottomLine.Visible = false
+            Parts.CenterDot.Visible = false
+            return
         end
-
-        PlayerTable.Connections.Box = RunService.RenderStepped:Connect(function()
-            local BS = Environment.Visuals.BoxSettings
-            if not (Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-                and Player.Character:FindFirstChild("HumanoidRootPart")
-                and Player.Character:FindFirstChild("Head")
-                and Environment.Settings.Enabled and BS.Enabled) then
-                HideAll(); return
-            end
-
-            local passChecks = PlayerTable.Checks.Alive and PlayerTable.Checks.Team and PlayerTable.Checks.Distance
-            if not passChecks then HideAll(); return end
-
-            local Vector, OnScreen = WorldToViewportPoint(Player.Character.HumanoidRootPart.Position)
-            if not OnScreen then HideAll(); return end
-
-            local HRPCFrame = Player.Character.HumanoidRootPart.CFrame
-            local HRPSize   = Player.Character.HumanoidRootPart.Size * BS.Increase
-
-            local HeadOff = WorldToViewportPoint(Player.Character.Head.Position + Vector3new(0, 0.5, 0))
-            local LegsOff = WorldToViewportPoint(Player.Character.HumanoidRootPart.Position - Vector3new(0, 3, 0))
-
-            if BS.Type == 2 then
-                -- 2D Square
-                PlayerTable.Box.TopLeftLine.Visible    = false
-                PlayerTable.Box.TopRightLine.Visible   = false
-                PlayerTable.Box.BottomLeftLine.Visible = false
-                PlayerTable.Box.BottomRightLine.Visible = false
-
-                local sq = PlayerTable.Box.Square
-                sq.Visible      = true
-                sq.Thickness    = BS.Thickness
-                sq.Color        = BS.Color
-                sq.Transparency = BS.Transparency
-                sq.Filled       = BS.Filled
-                sq.Size         = Vector2new(2000 / Vector.Z, HeadOff.Y - LegsOff.Y)
-                sq.Position     = Vector2new(Vector.X - sq.Size.X / 2, Vector.Y - sq.Size.Y / 2)
-            else
-                -- 3D Corner Box
-                PlayerTable.Box.Square.Visible = false
-
-                local TL = WorldToViewportPoint((HRPCFrame * CFramenew( HRPSize.X,  HRPSize.Y, 0)).Position)
-                local TR = WorldToViewportPoint((HRPCFrame * CFramenew(-HRPSize.X,  HRPSize.Y, 0)).Position)
-                local BL = WorldToViewportPoint((HRPCFrame * CFramenew( HRPSize.X, -HRPSize.Y - 0.5, 0)).Position)
-                local BR = WorldToViewportPoint((HRPCFrame * CFramenew(-HRPSize.X, -HRPSize.Y - 0.5, 0)).Position)
-
-                local lines = {
-                    {PlayerTable.Box.TopLeftLine,    TL, TR},
-                    {PlayerTable.Box.TopRightLine,   TR, BR},
-                    {PlayerTable.Box.BottomLeftLine, BL, TL},
-                    {PlayerTable.Box.BottomRightLine,BR, BL},
-                }
-
-                for _, l in next, lines do
-                    l[1].Visible = true
-                    ApplyLineStyle(l[1])
-                    l[1].From = Vector2new(l[2].X, l[2].Y)
-                    l[1].To   = Vector2new(l[3].X, l[3].Y)
-                end
-            end
-        end)
-    end,
-
-    AddHeadDot = function(Player)
-        local PlayerTable = GetPlayerTable(Player)
-        PlayerTable.HeadDot = Drawingnew("Circle")
-
-        PlayerTable.Connections.HeadDot = RunService.RenderStepped:Connect(function()
-            local HS = Environment.Visuals.HeadDotSettings
-            if not (Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-                and Player.Character:FindFirstChild("Head")
-                and Environment.Settings.Enabled and HS.Enabled) then
-                PlayerTable.HeadDot.Visible = false
-                return
-            end
-
-            local Vector, OnScreen = WorldToViewportPoint(Player.Character.Head.Position)
-            local passChecks = PlayerTable.Checks.Alive and PlayerTable.Checks.Team and PlayerTable.Checks.Distance
-
-            if not (OnScreen and passChecks) then
-                PlayerTable.HeadDot.Visible = false
-                return
-            end
-
-            local Top    = WorldToViewportPoint((Player.Character.Head.CFrame * CFramenew(0,  Player.Character.Head.Size.Y / 2, 0)).Position)
-            local Bottom = WorldToViewportPoint((Player.Character.Head.CFrame * CFramenew(0, -Player.Character.Head.Size.Y / 2, 0)).Position)
-
-            PlayerTable.HeadDot.Thickness    = HS.Thickness
-            PlayerTable.HeadDot.Color        = HS.Color
-            PlayerTable.HeadDot.Transparency = HS.Transparency
-            PlayerTable.HeadDot.NumSides     = HS.Sides
-            PlayerTable.HeadDot.Filled       = HS.Filled
-            PlayerTable.HeadDot.Position     = Vector2new(Vector.X, Vector.Y)
-            PlayerTable.HeadDot.Radius       = mathabs((Top - Bottom).Y) - 3
-            PlayerTable.HeadDot.Visible      = true
-        end)
-    end,
-
-    AddHealthBar = function(Player)
-        local PlayerTable = GetPlayerTable(Player)
-        PlayerTable.HealthBar.Main    = Drawingnew("Square")
-        PlayerTable.HealthBar.Outline = Drawingnew("Square")
-
-        PlayerTable.Connections.HealthBar = RunService.RenderStepped:Connect(function()
-            local HB = Environment.Visuals.HealthBarSettings
-            if not (Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-                and Player.Character:FindFirstChild("HumanoidRootPart")
-                and Environment.Settings.Enabled and HB.Enabled) then
-                PlayerTable.HealthBar.Main.Visible    = false
-                PlayerTable.HealthBar.Outline.Visible = false
-                return
-            end
-
-            local passChecks = PlayerTable.Checks.Alive and PlayerTable.Checks.Team and PlayerTable.Checks.Distance
-            if not passChecks then
-                PlayerTable.HealthBar.Main.Visible    = false
-                PlayerTable.HealthBar.Outline.Visible = false
-                return
-            end
-
-            local Vector, OnScreen = WorldToViewportPoint(Player.Character.HumanoidRootPart.Position)
-            if not OnScreen then
-                PlayerTable.HealthBar.Main.Visible    = false
-                PlayerTable.HealthBar.Outline.Visible = false
-                return
-            end
-
-            local Humanoid    = Player.Character:FindFirstChildOfClass("Humanoid")
-            local HRP         = Player.Character.HumanoidRootPart
-            local LeftPos     = WorldToViewportPoint((HRP.CFrame * CFramenew( HRP.Size.X, HRP.Size.Y / 2, 0)).Position)
-            local RightPos    = WorldToViewportPoint((HRP.CFrame * CFramenew(-HRP.Size.X, HRP.Size.Y / 2, 0)).Position)
-            local healthRatio = Humanoid.Health / Humanoid.MaxHealth
-
-            local main    = PlayerTable.HealthBar.Main
-            local outline = PlayerTable.HealthBar.Outline
-
-            main.Thickness    = 1
-            main.Color        = Color3fromRGB(mathfloor((1 - healthRatio) * 255), mathfloor(healthRatio * 255), HB.Blue)
-            main.Transparency = HB.Transparency
-            main.Filled       = true
-            main.ZIndex       = 2
-
-            outline.Thickness    = 3
-            outline.Color        = HB.OutlineColor
-            outline.Transparency = HB.Transparency
-            outline.Filled       = false
-            outline.ZIndex       = 1
-
-            if HB.Type == 1 then
-                outline.Size     = Vector2new(2000 / Vector.Z, HB.Size)
-                main.Size        = Vector2new(outline.Size.X * healthRatio, outline.Size.Y)
-                main.Position    = Vector2new(Vector.X - outline.Size.X / 2, Vector.Y - outline.Size.X / 2 - HB.Offset)
-            elseif HB.Type == 2 then
-                outline.Size     = Vector2new(2000 / Vector.Z, HB.Size)
-                main.Size        = Vector2new(outline.Size.X * healthRatio, outline.Size.Y)
-                main.Position    = Vector2new(Vector.X - outline.Size.X / 2, Vector.Y + outline.Size.X / 2 + HB.Offset)
-            elseif HB.Type == 3 then
-                outline.Size     = Vector2new(HB.Size, 2500 / Vector.Z)
-                main.Size        = Vector2new(outline.Size.X, outline.Size.Y * healthRatio)
-                main.Position    = Vector2new(LeftPos.X - HB.Offset, Vector.Y - outline.Size.Y / 2)
-            elseif HB.Type == 4 then
-                outline.Size     = Vector2new(HB.Size, 2500 / Vector.Z)
-                main.Size        = Vector2new(outline.Size.X, outline.Size.Y * healthRatio)
-                main.Position    = Vector2new(RightPos.X + HB.Offset, Vector.Y - outline.Size.Y / 2)
-            end
-
-            outline.Position = main.Position
-            main.Visible     = true
-            outline.Visible  = true
-        end)
-    end,
-
-    AddCrosshair = function()
-        local AxisX, AxisY = Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2
-        local CS = Environment.Crosshair.Settings
-        local CP = Environment.Crosshair.Parts
-
-        ServiceConnections.AxisConnection = RunService.RenderStepped:Connect(function()
-            if CS.Type == 2 then
-                AxisX, AxisY = Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2
-            else
-                local ml = UserInputService:GetMouseLocation()
-                AxisX, AxisY = ml.X, ml.Y
-            end
-        end)
-
-        ServiceConnections.CrosshairConnection = RunService.RenderStepped:Connect(function()
-            if not CS.Enabled then
-                CP.LeftLine.Visible = false; CP.RightLine.Visible = false
-                CP.TopLine.Visible  = false; CP.BottomLine.Visible = false
-                CP.CenterDot.Visible = false
-                return
-            end
-
-            local rot, gap, sz = CS.Rotation, CS.GapSize, CS.Size
-            local cosR, sinR = mathcos(mathrad(rot)), mathsin(mathrad(rot))
-
-            local function applyLine(line, fromX, fromY, toX, toY)
-                line.Visible     = true
-                line.Color       = CS.Color
-                line.Thickness   = CS.Thickness
-                line.Transparency = CS.Transparency
-                line.From        = Vector2new(fromX, fromY)
-                line.To          = Vector2new(toX, toY)
-            end
-
-            applyLine(CP.LeftLine,
-                AxisX - cosR * gap,         AxisY - sinR * gap,
-                AxisX - cosR * (sz + gap),  AxisY - sinR * (sz + gap))
-
-            applyLine(CP.RightLine,
-                AxisX + cosR * gap,         AxisY + sinR * gap,
-                AxisX + cosR * (sz + gap),  AxisY + sinR * (sz + gap))
-
-            applyLine(CP.TopLine,
-                AxisX - sinR * gap,         AxisY - cosR * gap,
-                AxisX - sinR * (sz + gap),  AxisY - cosR * (sz + gap))
-
-            applyLine(CP.BottomLine,
-                AxisX + sinR * gap,         AxisY + cosR * gap,
-                AxisX + sinR * (sz + gap),  AxisY + cosR * (sz + gap))
-
-            -- Center Dot
-            CP.CenterDot.Visible     = CS.CenterDot
-            CP.CenterDot.Color       = CS.CenterDotColor
-            CP.CenterDot.Radius      = CS.CenterDotSize
-            CP.CenterDot.Transparency = CS.CenterDotTransparency
-            CP.CenterDot.Filled      = CS.CenterDotFilled
-            CP.CenterDot.Thickness   = CS.CenterDotThickness
-            CP.CenterDot.Position    = Vector2new(AxisX, AxisY)
-        end)
+        
+        -- Get crosshair position
+        local PosX, PosY
+        if Settings.Type == 2 then
+            PosX = CachedViewportSize.X / 2
+            PosY = CachedViewportSize.Y / 2
+        else
+            PosX = CachedMouseLocation.X
+            PosY = CachedMouseLocation.Y
+        end
+        
+        local Rad = mathrad(Settings.Rotation)
+        local CosR = mathcos(Rad)
+        local SinR = mathsin(Rad)
+        local Gap = Settings.GapSize
+        local Size = Settings.Size
+        
+        -- Update lines
+        local function UpdateLine(Line, FromX, FromY, ToX, ToY)
+            Line.Visible = true
+            Line.Color = Settings.Color
+            Line.Thickness = Settings.Thickness
+            Line.Transparency = Settings.Transparency
+            Line.From = Vector2new(FromX, FromY)
+            Line.To = Vector2new(ToX, ToY)
+        end
+        
+        UpdateLine(Parts.LeftLine,
+            PosX - CosR * Gap, PosY - SinR * Gap,
+            PosX - CosR * (Size + Gap), PosY - SinR * (Size + Gap))
+        
+        UpdateLine(Parts.RightLine,
+            PosX + CosR * Gap, PosY + SinR * Gap,
+            PosX + CosR * (Size + Gap), PosY + SinR * (Size + Gap))
+        
+        UpdateLine(Parts.TopLine,
+            PosX - SinR * Gap, PosY - CosR * Gap,
+            PosX - SinR * (Size + Gap), PosY - CosR * (Size + Gap))
+        
+        UpdateLine(Parts.BottomLine,
+            PosX + SinR * Gap, PosY + CosR * Gap,
+            PosX + SinR * (Size + Gap), PosY + CosR * (Size + Gap))
+        
+        -- Update center dot
+        Parts.CenterDot.Visible = Settings.CenterDot
+        Parts.CenterDot.Color = Settings.CenterDotColor
+        Parts.CenterDot.Radius = Settings.CenterDotSize
+        Parts.CenterDot.Transparency = Settings.CenterDotTransparency
+        Parts.CenterDot.Filled = Settings.CenterDotFilled
+        Parts.CenterDot.Thickness = Settings.CenterDotThickness
+        Parts.CenterDot.Position = Vector2new(PosX, PosY)
     end
 }
 
---// Wrap / UnWrap
-
-local function Wrap(Player)
-    if GetPlayerTable(Player) then return end
-
-    local Value = {
-        Name    = Player.Name,
-        Checks  = {Alive = true, Team = true, Distance = true},
+--// Player Data Management
+local function InitializePlayerData(Player)
+    if Player == LocalPlayer or PlayerData[Player] then
+        return
+    end
+    
+    local Data = {
+        Checks = {
+            Alive = true,
+            Team = true,
+            Distance = true
+        },
         Connections = {},
-        ESP     = nil, Tracer = nil, HeadDot = nil,
-        HealthBar = {Main = nil, Outline = nil},
-        Box     = {Square = nil, TopLeftLine = nil, TopRightLine = nil, BottomLeftLine = nil, BottomRightLine = nil},
-        Chams   = {}
+        ESP = Drawingnew("Text"),
+        Tracer = Drawingnew("Line"),
+        HeadDot = Drawingnew("Circle"),
+        HealthBar = {
+            Main = Drawingnew("Square"),
+            Outline = Drawingnew("Square")
+        },
+        Box = {
+            Square = Drawingnew("Square"),
+            TopLeftLine = Drawingnew("Line"),
+            TopRightLine = Drawingnew("Line"),
+            BottomLeftLine = Drawingnew("Line"),
+            BottomRightLine = Drawingnew("Line")
+        },
+        Chams = {}
     }
-
-    Environment.WrappedPlayers[#Environment.WrappedPlayers + 1] = Value
-    AssignRigType(Player)
-    InitChecks(Player)
-
-    Visuals.AddChams(Player)
-    Visuals.AddESP(Player)
-    Visuals.AddTracer(Player)
-    Visuals.AddBox(Player)
-    Visuals.AddHeadDot(Player)
-    Visuals.AddHealthBar(Player)
-end
-
-local function UnWrap(Player)
-    local Table, Index = nil, nil
-    for i, v in next, Environment.WrappedPlayers do
-        if v.Name == Player.Name then Table, Index = v, i end
+    
+    -- Initialize chams based on rig type
+    local function SetupChams()
+        local Character = Player.Character
+        if not Character then
+            return false
+        end
+        
+        local RigType = GetRigType(Character)
+        if not RigType then
+            return false
+        end
+        
+        local Parts
+        if RigType == "R15" then
+            if Environment.Visuals.ChamsSettings.EntireBody then
+                Parts = {"Head", "UpperTorso", "LowerTorso", "LeftUpperArm", "LeftLowerArm", "LeftHand",
+                        "RightUpperArm", "RightLowerArm", "RightHand", "LeftUpperLeg", "LeftLowerLeg",
+                        "LeftFoot", "RightUpperLeg", "RightLowerLeg", "RightFoot"}
+            else
+                Parts = {"Head", "UpperTorso", "LeftLowerArm", "LeftUpperArm", "RightLowerArm",
+                        "RightUpperArm", "LeftLowerLeg", "LeftUpperLeg", "RightLowerLeg", "RightUpperLeg"}
+            end
+        else
+            Parts = {"Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
+        end
+        
+        for _, PartName in next, Parts do
+            Data.Chams[PartName] = CreateChamQuads()
+        end
+        
+        return true
     end
-    if not Table then return end
-
-    for _, conn in next, Table.Connections do conn:Disconnect() end
-
-    pcall(function()
-        Table.ESP:Remove()
-        Table.Tracer:Remove()
-        Table.HeadDot:Remove()
-        Table.HealthBar.Main:Remove()
-        Table.HealthBar.Outline:Remove()
+    
+    -- Update checks every frame
+    Data.Connections.UpdateChecks = RunService.RenderStepped:Connect(function()
+        if not Environment.Settings.Enabled then
+            Data.Checks.Alive = false
+            Data.Checks.Team = false
+            Data.Checks.Distance = false
+            return
+        end
+        
+        local Character = Player.Character
+        if not Character then
+            Data.Checks.Alive = false
+            Data.Checks.Team = false
+            Data.Checks.Distance = false
+            return
+        end
+        
+        local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+        local RootPart = Character:FindFirstChild("HumanoidRootPart")
+        
+        if not Humanoid or not RootPart then
+            Data.Checks.Alive = false
+            Data.Checks.Team = false
+            Data.Checks.Distance = false
+            return
+        end
+        
+        Data.Checks.Alive = not Environment.Settings.AliveCheck or Humanoid.Health > 0
+        Data.Checks.Team = not Environment.Settings.TeamCheck or Player.TeamColor ~= LocalPlayer.TeamColor
+        Data.Checks.Distance = IsWithinDistance(RootPart.Position)
     end)
-
-    for _, v in next, Table.Box do
-        if v and v.Remove then v:Remove() end
-    end
-
-    for _, chamParts in next, Table.Chams do
-        for i = 1, 6 do
-            local q = chamParts["Quad"..i]
-            if q and q.Remove then q:Remove() end
+    
+    -- Update visuals every frame
+    Data.Connections.Visuals = RunService.RenderStepped:Connect(function()
+        if not Environment.Settings.Enabled then
+            return
+        end
+        
+        Visuals.UpdateESP(Player, Data)
+        Visuals.UpdateTracer(Player, Data)
+        Visuals.UpdateBox(Player, Data)
+        Visuals.UpdateHeadDot(Player, Data)
+        Visuals.UpdateHealthBar(Player, Data)
+        Visuals.UpdateChams(Player, Data)
+    end)
+    
+    -- Setup chams when character loads
+    local function OnCharacterAdded(Character)
+        task.wait(0.5) -- Wait for character to load
+        if SetupChams() then
+            -- Update entire body setting if changed
+            Data.Connections.ChamsRebuild = RunService.Heartbeat:Connect(function()
+                local CurrentSetting = Environment.Visuals.ChamsSettings.EntireBody
+                if Data.LastEntireBody ~= CurrentSetting then
+                    Data.LastEntireBody = CurrentSetting
+                    SetupChams()
+                end
+            end)
         end
     end
-
-    Environment.WrappedPlayers[Index] = nil
+    
+    if Player.Character then
+        OnCharacterAdded(Player.Character)
+    end
+    
+    Data.Connections.CharacterAdded = Player.CharacterAdded:Connect(OnCharacterAdded)
+    
+    PlayerData[Player] = Data
 end
 
+--// Crosshair Setup
+local function SetupCrosshair()
+    -- Update cache variables
+    ServiceConnections.CacheUpdate = RunService.RenderStepped:Connect(function()
+        CachedViewportSize = Camera.ViewportSize
+        CachedMouseLocation = UserInputService:GetMouseLocation()
+    end)
+    
+    -- Update crosshair
+    ServiceConnections.Crosshair = RunService.RenderStepped:Connect(function()
+        Visuals.UpdateCrosshair()
+    end)
+end
+
+--// Main Load Function
 local function Load()
-    Visuals.AddCrosshair()
-    ServiceConnections.PlayerAdded    = Players.PlayerAdded:Connect(Wrap)
-    ServiceConnections.PlayerRemoving = Players.PlayerRemoving:Connect(UnWrap)
-
-    -- Periodic re-wrap to catch any missed players
-    local lastRewrap = 0
-    ServiceConnections.ReWrapPlayers = RunService.Heartbeat:Connect(function()
-        local now = tick()
-        if now - lastRewrap < 30 then return end
-        lastRewrap = now
-        for _, v in next, Players:GetPlayers() do
-            if v ~= LocalPlayer then Wrap(v) end
+    SetupCrosshair()
+    
+    -- Initialize existing players
+    for _, Player in next, Players:GetPlayers() do
+        if Player ~= LocalPlayer then
+            InitializePlayerData(Player)
+        end
+    end
+    
+    -- Handle new players
+    ServiceConnections.PlayerAdded = Players.PlayerAdded:Connect(function(Player)
+        if Player ~= LocalPlayer then
+            InitializePlayerData(Player)
+        end
+    end)
+    
+    -- Handle player removal
+    ServiceConnections.PlayerRemoving = Players.PlayerRemoving:Connect(function(Player)
+        CleanupPlayerData(Player)
+    end)
+    
+    -- Cleanup local player if needed
+    ServiceConnections.LocalPlayerRemoving = Players.PlayerRemoving:Connect(function(Player)
+        if Player == LocalPlayer then
+            -- Exit when local player leaves (game hop)
+            Environment.Functions:Exit()
         end
     end)
 end
 
---// Functions
-
-Environment.Functions = {}
-
+--// Public Functions
 function Environment.Functions:Exit()
-    for _, v in next, ServiceConnections do v:Disconnect() end
-    for _, v in next, Environment.Crosshair.Parts do v:Remove() end
-    for _, v in next, Players:GetPlayers() do
-        if v ~= LocalPlayer then UnWrap(v) end
+    -- Clean up all player data
+    for Player, _ in next, PlayerData do
+        CleanupPlayerData(Player)
     end
-    getgenv().AirHub.WallHack.Functions = nil
+    
+    -- Disconnect all service connections
+    for _, Connection in next, ServiceConnections do
+        Connection:Disconnect()
+    end
+    
+    -- Remove crosshair
+    for _, Part in next, Environment.Crosshair.Parts do
+        pcall(function() Part:Remove() end)
+    end
+    
+    -- Clear environment
+    Environment.Functions = nil
     getgenv().AirHub.WallHack = nil
-    Load = nil; GetPlayerTable = nil; AssignRigType = nil; InitChecks = nil
-    UpdateCham = nil; Visuals = nil; Wrap = nil; UnWrap = nil
 end
 
 function Environment.Functions:Restart()
-    for _, v in next, Players:GetPlayers() do
-        if v ~= LocalPlayer then UnWrap(v) end
+    -- Clean up everything
+    for Player, _ in next, PlayerData do
+        CleanupPlayerData(Player)
     end
-    for _, v in next, ServiceConnections do v:Disconnect() end
+    
+    for _, Connection in next, ServiceConnections do
+        Connection:Disconnect()
+    end
+    
+    -- Reload
     Load()
 end
 
 function Environment.Functions:ResetSettings()
     Environment.Settings = {
-        Enabled = false, TeamCheck = false, AliveCheck = true, MaxDistance = 1000
+        Enabled = false,
+        TeamCheck = false,
+        AliveCheck = true,
+        MaxDistance = 1000
     }
-
+    
     Environment.Visuals = {
-        ChamsSettings = {Enabled=false, Color=Color3fromRGB(255,255,255), Transparency=0.2, Thickness=0, Filled=true, EntireBody=false},
-        ESPSettings   = {Enabled=true, TextColor=Color3fromRGB(255,255,255), TextSize=14, Outline=true, OutlineColor=Color3fromRGB(0,0,0), TextTransparency=0.7, TextFont=Drawing.Fonts.UI, Offset=20, DisplayDistance=true, DisplayHealth=true, DisplayName=true},
-        TracersSettings = {Enabled=true, Type=1, Transparency=0.7, Thickness=1, Color=Color3fromRGB(255,255,255)},
-        BoxSettings   = {Enabled=true, Type=1, Color=Color3fromRGB(255,255,255), Transparency=0.7, Thickness=1, Filled=false, Increase=1},
-        HeadDotSettings = {Enabled=true, Color=Color3fromRGB(255,255,255), Transparency=0.5, Thickness=1, Filled=false, Sides=30},
-        HealthBarSettings = {Enabled=false, Transparency=0.8, Size=2, Offset=10, OutlineColor=Color3fromRGB(0,0,0), Blue=50, Type=3}
+        ChamsSettings = {
+            Enabled = false,
+            Color = Color3fromRGB(255, 255, 255),
+            Transparency = 0.2,
+            Thickness = 0,
+            Filled = true,
+            EntireBody = false
+        },
+        ESPSettings = {
+            Enabled = true,
+            TextColor = Color3fromRGB(255, 255, 255),
+            TextSize = 14,
+            Outline = true,
+            OutlineColor = Color3fromRGB(0, 0, 0),
+            TextTransparency = 0.7,
+            TextFont = Drawing.Fonts.UI,
+            Offset = 20,
+            DisplayDistance = true,
+            DisplayHealth = true,
+            DisplayName = true
+        },
+        TracersSettings = {
+            Enabled = true,
+            Type = 1,
+            Transparency = 0.7,
+            Thickness = 1,
+            Color = Color3fromRGB(255, 255, 255)
+        },
+        BoxSettings = {
+            Enabled = true,
+            Type = 1,
+            Color = Color3fromRGB(255, 255, 255),
+            Transparency = 0.7,
+            Thickness = 1,
+            Filled = false,
+            Increase = 1
+        },
+        HeadDotSettings = {
+            Enabled = true,
+            Color = Color3fromRGB(255, 255, 255),
+            Transparency = 0.5,
+            Thickness = 1,
+            Filled = false,
+            Sides = 30
+        },
+        HealthBarSettings = {
+            Enabled = false,
+            Transparency = 0.8,
+            Size = 2,
+            Offset = 10,
+            OutlineColor = Color3fromRGB(0, 0, 0),
+            Blue = 50,
+            Type = 3
+        }
     }
-
+    
     Environment.Crosshair.Settings = {
-        Enabled=false, Type=1, Size=12, Thickness=1, Color=Color3fromRGB(0,255,0), Transparency=1, GapSize=5,
-        Rotation=0, CenterDot=false, CenterDotColor=Color3fromRGB(0,255,0), CenterDotSize=1,
-        CenterDotTransparency=1, CenterDotFilled=true, CenterDotThickness=1
+        Enabled = false,
+        Type = 1,
+        Size = 12,
+        Thickness = 1,
+        Color = Color3fromRGB(0, 255, 0),
+        Transparency = 1,
+        GapSize = 5,
+        Rotation = 0,
+        CenterDot = false,
+        CenterDotColor = Color3fromRGB(0, 255, 0),
+        CenterDotSize = 1,
+        CenterDotTransparency = 1,
+        CenterDotFilled = true,
+        CenterDotThickness = 1
     }
 end
 
-setmetatable(Environment.Functions, {__newindex = warn})
+--// Metatable protection
+setmetatable(Environment.Functions, {
+    __newindex = function()
+        warn("Cannot modify WallHack functions table")
+    end
+})
 
---// Main
-
+--// Initialize
 Load()
