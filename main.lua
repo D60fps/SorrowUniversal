@@ -34,12 +34,10 @@ local MainWindow = Rayfield:CreateWindow({
 local function MakeTab(name)
     local t = {}
     local _tab = MainWindow:CreateTab(name, 4483362458)
-    -- Create a default section immediately so elements always have somewhere to go
-    local _curSection = _tab:CreateSection("Settings", true)
 
     function t:AddToggle(opts, cb)
         Flags[opts.Flag] = opts.Default or false
-        _curSection:CreateToggle({ Name=opts.Text, CurrentValue=opts.Default or false, Flag=opts.Flag,
+        _tab:CreateToggle({ Name=opts.Text, CurrentValue=opts.Default or false, Flag=opts.Flag,
             Callback=function(v) Flags[opts.Flag]=v; if cb then cb(v) end end })
         return { SetValue = function(_, v) Flags[opts.Flag]=v; if cb then cb(v) end end }
     end
@@ -47,7 +45,7 @@ local function MakeTab(name)
     function t:AddSlider(opts, cb)
         Flags[opts.Flag] = opts.Default or 0
         local inc = (opts.Max and opts.Max <= 1) and 0.01 or 1
-        _curSection:CreateSlider({ Name=opts.Text, Range={opts.Min or 0, opts.Max or 100},
+        _tab:CreateSlider({ Name=opts.Text, Range={opts.Min or 0, opts.Max or 100},
             Increment=inc, Suffix=opts.Suffix or "",
             CurrentValue=opts.Default or 0, Flag=opts.Flag,
             Callback=function(v) Flags[opts.Flag]=v; if cb then cb(v) end end })
@@ -57,7 +55,7 @@ local function MakeTab(name)
     function t:AddDropdown(opts, cb)
         local def = opts.Default or (opts.Values and opts.Values[1]) or ""
         Flags[opts.Flag] = def
-        _curSection:CreateDropdown({ Name=opts.Text, Options=opts.Values or {},
+        _tab:CreateDropdown({ Name=opts.Text, Options=opts.Values or {},
             CurrentOption={def}, Flag=opts.Flag,
             Callback=function(v) local val=v[1]; Flags[opts.Flag]=val; if cb then cb(val) end end })
         return { SetValue = function(_, v) Flags[opts.Flag]=v; if cb then cb(v) end end }
@@ -66,19 +64,18 @@ local function MakeTab(name)
     function t:AddColorPicker(opts, cb)
         local def = opts.Default or Color3fromRGB(255,255,255)
         Flags[opts.Flag] = def
-        _curSection:CreateColorPicker({ Name=opts.Text, Color=def, Flag=opts.Flag,
+        _tab:CreateColorPicker({ Name=opts.Text, Color=def, Flag=opts.Flag,
             Callback=function(v) Flags[opts.Flag]=v; if cb then cb(v) end end })
         return { SetValue = function(_, v) Flags[opts.Flag]=v; if cb then cb(v) end end }
     end
 
     function t:AddButton(opts, cb)
-        _curSection:CreateButton({ Name=opts.Text, Callback=function() if cb then cb() end end })
+        _tab:CreateButton({ Name=opts.Text, Callback=function() if cb then cb() end end })
         return { Click = function() if cb then cb() end end }
     end
 
     function t:AddLabel(text)
-        -- Each label becomes a new section header
-        _curSection = _tab:CreateSection(text, true)
+        _tab:CreateSection(text)
     end
 
     return t
