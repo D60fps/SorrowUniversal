@@ -59,10 +59,36 @@ MainTab:CreateSlider({ Name="Aimbot Sensitivity", Range={0,2}, Increment=0.01, S
 MainTab:CreateToggle({ Name="Aimbot Toggle Mode", CurrentValue=false, Flag="Aimbot_Toggle",
     Callback=function(v) if Aimbot and Aimbot.Settings then Aimbot.Settings.Toggle=v end end })
 
-MainTab:CreateDropdown({ Name="Aimbot Trigger Key",
-    Options={"MouseButton1","MouseButton2","MouseButton3","E","Q","F","C","X","Z","V"},
-    CurrentOption={"MouseButton2"}, Flag="Aimbot_TriggerKey",
-    Callback=function(v) if Aimbot and Aimbot.Settings then Aimbot.Settings.TriggerKey=v[1] end end })
+-- Keybind button: click it, then press any key/mouse button
+local _bindingKey = false
+local _keybindBtn
+
+_keybindBtn = MainTab:CreateButton({ Name="Hotkey: MouseButton2",
+    Callback=function()
+        if _bindingKey then return end
+        _bindingKey = true
+        _keybindBtn.Name = "[ PRESS ANY KEY / BUTTON... ]"
+
+        local conn
+        conn = game:GetService("UserInputService").InputBegan:Connect(function(input)
+            if not _bindingKey then return end
+            _bindingKey = false
+
+            local key
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                key = input.KeyCode.Name
+            else
+                key = input.UserInputType.Name
+            end
+
+            if Aimbot and Aimbot.Settings then
+                Aimbot.Settings.TriggerKey = key
+            end
+            _keybindBtn.Name = "Hotkey: " .. key
+            conn:Disconnect()
+        end)
+    end
+})
 
 -- ══════════════════════════════════════════════════
 --  AIMBOT TAB
