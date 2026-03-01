@@ -1,1447 +1,862 @@
---[[
-    AirHub V3 - Universal Executor Compatible
-    Fixed & Recoded for Maximum Compatibility
-    Features:
-    - Zero errors guaranteed
-    - Works on ALL executors (Synapse, Krnl, ScriptWare, Fluxus, etc.)
-    - Proper environment handling
-    - Safe HTTP requests with fallbacks
-    - Robust UI system
-    - Working configuration
-]]
+--// Cache
+local pcall, getgenv, next, setmetatable, Vector2new, Color3fromRGB, Drawingnew, taskwait = pcall, getgenv, next, setmetatable, Vector2.new, Color3.fromRGB, Drawing.new, task.wait
+local stringsplit, tableinsert, tablefind, mathfloor, mathclamp = string.split, table.insert, table.find, math.floor, math.clamp
 
---===================================================================
--- ENVIRONMENT SETUP (Most Critical Part)
---===================================================================
+--// Services
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
--- Safe environment detection with fallbacks
-local env = {
-    -- File system functions
-    isfile = isfile or function() return false end,
-    readfile = readfile or function() return "" end,
-    writefile = writefile or function() end,
-    delfile = delfile or function() end,
-    listfiles = listfiles or function() return {} end,
-    makefolder = makefolder or function() end,
-    isfolder = isfolder or function() return false end,
+--// Load Modules
+local WallHack = loadstring(game:HttpGet("https://raw.githubusercontent.com/yourrepo/WallHack.lua"))()
+local Aimbot = loadstring(game:HttpGet("https://raw.githubusercontent.com/yourrepo/Aimbot.lua"))()
+
+--// Lindoria Library (Simulated)
+local Library = {}
+local Window = {}
+local Tabs = {}
+local Flags = {}
+
+--// Lindoria-like Functions
+do
+    local ActualLib = {}
     
-    -- HTTP functions
-    request = request or http_request or (syn and syn.request) or function() return {Body = ""} end,
-    
-    -- Executor info
-    executor = identifyexecutor and identifyexecutor() or "Universal",
-    
-    -- Global environment
-    genv = getgenv and getgenv() or _G or getfenv(0)
-}
-
---===================================================================
--- SERVICE CACHING
---===================================================================
-
-local Services = {
-    Players = game:GetService("Players"),
-    RunService = game:GetService("RunService"),
-    UserInputService = game:GetService("UserInputService"),
-    HttpService = game:GetService("HttpService"),
-    CoreGui = game:GetService("CoreGui"),
-    GuiService = game:GetService("GuiService")
-}
-
-local LocalPlayer = Services.Players.LocalPlayer
-local IsTyping = false
-
---===================================================================
--- SAFE UTILITY FUNCTIONS
---===================================================================
-
-local function safeHttpGet(url)
-    local success, result = pcall(function()
-        -- Try multiple methods in order of reliability
-        if syn and syn.request then
-            local response = syn.request({Url = url, Method = "GET"})
-            return response.Body
-        elseif env.request then
-            local response = env.request({Url = url, Method = "GET"})
-            return response.Body
-        else
-            return game:HttpGet(url)
-        end
-    end)
-    
-    if success and result then
-        return result
-    end
-    return nil
-end
-
-local function safeWait(seconds)
-    local start = os.clock()
-    repeat
-        Services.RunService.Heartbeat:Wait()
-    until os.clock() - start >= seconds
-end
-
---===================================================================
--- FILE SYSTEM CHECK
---===================================================================
-
-local function testFileSystem()
-    local supported = pcall(function()
-        local testFile = "__airhub_test__.txt"
-        env.writefile(testFile, "test")
-        local content = env.readfile(testFile)
-        env.delfile(testFile)
-        return content == "test"
-    end)
-    return supported
-end
-
-local FS_SUPPORTED = testFileSystem()
-local CONFIG_FOLDER = "AirHubV3"
-
-if FS_SUPPORTED then
-    pcall(function()
-        if not env.isfolder(CONFIG_FOLDER) then
-            env.makefolder(CONFIG_FOLDER)
-        end
-    end)
-end
-
---===================================================================
--- MODULE LOADING WITH SAFE FALLBACKS
---===================================================================
-
-local MODULE_URLS = {
-    Aimbot = "https://raw.githubusercontent.com/D60fps/SorrowUniversal/main/Modules/Aimbot.lua",
-    WallHack = "https://raw.githubusercontent.com/D60fps/SorrowUniversal/main/Modules/Wall_Hack.lua",
-}
-
--- Create global container
-env.genv.AirHub = env.genv.AirHub or {}
-
--- Safe module loader with timeout
-local function loadModule(url, moduleName)
-    local success = false
-    local co = coroutine.create(function()
-        local src = safeHttpGet(url)
-        if src then
-            local fn, err = loadstring(src)
-            if fn then
-                pcall(fn)
-                success = true
-            end
-        end
-    end)
-    
-    coroutine.resume(co)
-    
-    -- Wait for module to load with timeout
-    local start = os.clock()
-    while not success and os.clock() - start < 5 do
-        safeWait(0.1)
-    end
-    
-    return success
-end
-
--- Load modules asynchronously
-coroutine.wrap(function()
-    loadModule(MODULE_URLS.Aimbot, "Aimbot")
-    loadModule(MODULE_URLS.WallHack, "WallHack")
-end)()
-
---===================================================================
--- SAFE DEFAULT CONFIGURATIONS
---===================================================================
-
-local function getSafeAimbot()
-    return {
-        Settings = {
-            Enabled = false,
-            Toggle = false,
-            TriggerKey = "Q",
-            Sensitivity = 0.5,
-            LockPart = "Head",
-            TeamCheck = false,
-            WallCheck = false,
-            AliveCheck = true,
-            ThirdPerson = false,
-            ThirdPersonSensitivity = 5,
-        },
-        FOVSettings = {
-            Enabled = false,
-            Visible = true,
-            Filled = false,
-            Amount = 90,
-            Thickness = 1,
-            Transparency = 0,
-            Sides = 60,
-            Color = Color3.fromRGB(255, 255, 255),
-            LockedColor = Color3.fromRGB(255, 0, 0),
-        },
-        SilentAim = {
-            Enabled = false,
-            TriggerKey = "MouseButton2",
-            Toggle = false,
-            TeamCheck = false,
-            AliveCheck = true,
-            WallCheck = false,
-            LockPart = "Head",
-            UseFOV = true,
-            FOVAmount = 90,
-            Prediction = 0,
-        },
-    }
-end
-
-local function getSafeWallHack()
-    return {
-        Settings = {
-            Enabled = false,
-            TeamCheck = false,
-            AliveCheck = true,
-            MaxDistance = 1000,
-        },
-        Visuals = {
-            ESPSettings = {
-                Enabled = false,
-                DisplayName = true,
-                DisplayHealth = true,
-                DisplayDistance = false,
-                TextSize = 13,
-                TextTransparency = 0,
-                TextColor = Color3.fromRGB(255, 255, 255),
-                OutlineColor = Color3.fromRGB(0, 0, 0),
-            },
-            BoxSettings = {
-                Enabled = false,
-                Type = 1,
-                Filled = false,
-                Thickness = 1,
-                Transparency = 0,
-                Increase = 4,
-                Color = Color3.fromRGB(255, 255, 255),
-            },
-            TracersSettings = {
-                Enabled = false,
-                Type = 1,
-                Thickness = 1,
-                Transparency = 0,
-                Color = Color3.fromRGB(255, 255, 255),
-            },
-            HeadDotSettings = {
-                Enabled = false,
-                Filled = false,
-                Sides = 20,
-                Thickness = 1,
-                Transparency = 0,
-                Color = Color3.fromRGB(255, 255, 255),
-            },
-        },
-        Crosshair = {
-            Settings = {
-                Enabled = false,
-                Type = 1,
-                Size = 10,
-                Thickness = 1,
-                GapSize = 4,
-                Rotation = 0,
-                Transparency = 0,
-                Color = Color3.fromRGB(255, 255, 255),
-                CenterDot = false,
-                CenterDotFilled = true,
-                CenterDotSize = 3,
-                CenterDotTransparency = 0,
-                CenterDotColor = Color3.fromRGB(255, 255, 255),
-            },
-        },
-    }
-end
-
--- Get or create module references
-local Aimbot = env.genv.AirHub.Aimbot or getSafeAimbot()
-local WallHack = env.genv.AirHub.WallHack or getSafeWallHack()
-
--- Ensure all tables exist
-env.genv.AirHub.Aimbot = Aimbot
-env.genv.AirHub.WallHack = WallHack
-
---===================================================================
--- LINORIA LIBRARY LOADING
---===================================================================
-
-local REPO = "https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/"
-
-local function loadLinoria()
-    local files = {
-        Library = REPO .. "Library.lua",
-        ThemeManager = REPO .. "addons/ThemeManager.lua",
-        SaveManager = REPO .. "addons/SaveManager.lua"
-    }
-    
-    local loaded = {}
-    
-    for name, url in pairs(files) do
-        local src = safeHttpGet(url)
-        if src then
-            local fn, err = loadstring(src)
-            if fn then
-                local success, result = pcall(fn)
-                if success then
-                    loaded[name] = result or true
+    function ActualLib:CreateWindow(title)
+        local window = {
+            Title = title,
+            Tabs = {},
+            Elements = {}
+        }
+        
+        function window:AddTab(name)
+            local tab = {
+                Name = name,
+                Elements = {}
+            }
+            
+            function tab:AddToggle(options, callback)
+                local element = {
+                    Type = "Toggle",
+                    Text = options.Text or "",
+                    Flag = options.Flag,
+                    Default = options.Default or false
+                }
+                
+                Flags[options.Flag] = element.Default
+                
+                function element:SetValue(value)
+                    Flags[options.Flag] = value
+                    if callback then callback(value) end
                 end
+                
+                table.insert(tab.Elements, element)
+                return element
             end
-        end
-        safeWait(0.1)
-    end
-    
-    return loaded.Library, loaded.ThemeManager, loaded.SaveManager
-end
-
-local Library, ThemeManager, SaveManager = loadLinoria()
-
-if not Library then
-    warn("AirHub: Failed to load Linoria Library")
-    return
-end
-
---===================================================================
--- UI CREATION
---===================================================================
-
--- Set watermark
-pcall(function()
-    Library:SetWatermarkVisibility(true)
-    Library:SetWatermark(("AirHub V3 | %s"):format(env.executor))
-end)
-
--- Create window
-local Window = Library:CreateWindow({
-    Title = "AirHub V3",
-    Center = true,
-    AutoShow = true,
-    TabPadding = 8,
-    MenuFadeTime = 0.2,
-})
-
--- Create tabs
-local Tabs = {
-    Aimbot = Window:AddTab("Aimbot"),
-    SilentAim = Window:AddTab("Silent Aim"),
-    Visuals = Window:AddTab("Visuals"),
-    Crosshair = Window:AddTab("Crosshair"),
-    Config = Window:AddTab("Config"),
-}
-
---===================================================================
--- DATA LISTS
---===================================================================
-
-local PartsList = {
-    "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso",
-    "Left Arm", "Right Arm", "Left Leg", "Right Leg",
-    "LeftHand", "RightHand", "LeftFoot", "RightFoot",
-}
-
-local TracerTypes = {"Bottom", "Center", "Mouse"}
-local BoxTypes = {"3D Corner", "2D Square"}
-local CrosshairTypes = {"Mouse", "Screen Center"}
-
---===================================================================
--- HOTKEY SYSTEM
---===================================================================
-
-local Binding = {Active = false, Target = nil, Callback = nil}
-
-Services.UserInputService.TextBoxFocused:Connect(function()
-    IsTyping = true
-end)
-
-Services.UserInputService.TextBoxFocusReleased:Connect(function()
-    IsTyping = false
-end)
-
-local function startBinding(button, currentKey, callback)
-    if Binding.Active then return end
-    
-    Binding.Active = true
-    Binding.Target = button
-    Binding.Callback = callback
-    
-    button:SetText("Press any key...")
-    
-    local connection
-    connection = Services.UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed or IsTyping then return end
-        
-        local keyName = input.KeyCode ~= Enum.KeyCode.Unknown and input.KeyCode.Name or 
-                       input.UserInputType ~= Enum.UserInputType.Unknown and input.UserInputType.Name or nil
-        
-        if keyName then
-            connection:Disconnect()
-            Binding.Active = false
-            Binding.Target = nil
-            button:SetText(keyName)
-            pcall(callback, keyName)
-        end
-    end)
-    
-    -- Timeout after 5 seconds
-    task.spawn(function()
-        safeWait(5)
-        if Binding.Active and Binding.Target == button then
-            connection:Disconnect()
-            Binding.Active = false
-            Binding.Target = nil
-            button:SetText(currentKey)
-        end
-    end)
-end
-
---===================================================================
--- AIMBOT TAB
---===================================================================
-
-do
-    local LeftGroup = Tabs.Aimbot:AddLeftGroupbox("Aimbot Settings")
-    local RightGroup = Tabs.Aimbot:AddRightGroupbox("FOV Circle")
-    
-    -- Aimbot Settings
-    LeftGroup:AddToggle("AimbotEnabled", {
-        Text = "Enable Aimbot",
-        Default = Aimbot.Settings.Enabled,
-        Callback = function(v) Aimbot.Settings.Enabled = v end
-    })
-    
-    LeftGroup:AddToggle("AimbotToggle", {
-        Text = "Toggle Mode",
-        Default = Aimbot.Settings.Toggle,
-        Callback = function(v) Aimbot.Settings.Toggle = v end
-    })
-    
-    local aimbotKeyBtn = LeftGroup:AddButton({
-        Text = Aimbot.Settings.TriggerKey,
-        Func = function()
-            startBinding(aimbotKeyBtn, Aimbot.Settings.TriggerKey, function(key)
-                Aimbot.Settings.TriggerKey = key
-            end)
-        end
-    })
-    aimbotKeyBtn:AddTooltip("Click to set aimbot hotkey")
-    
-    LeftGroup:AddSlider("AimbotSmoothing", {
-        Text = "Smoothing",
-        Default = Aimbot.Settings.Sensitivity,
-        Min = 0,
-        Max = 1,
-        Rounding = 2,
-        Suffix = "s",
-        Callback = function(v) Aimbot.Settings.Sensitivity = v end
-    })
-    
-    LeftGroup:AddDivider()
-    LeftGroup:AddLabel("Targeting Options")
-    
-    LeftGroup:AddDropdown("AimbotPart", {
-        Text = "Aim Part",
-        Default = Aimbot.Settings.LockPart,
-        Values = PartsList,
-        Callback = function(v) Aimbot.Settings.LockPart = v end
-    })
-    
-    LeftGroup:AddToggle("AimbotTeamCheck", {
-        Text = "Team Check",
-        Default = Aimbot.Settings.TeamCheck,
-        Callback = function(v) Aimbot.Settings.TeamCheck = v end
-    })
-    
-    LeftGroup:AddToggle("AimbotWallCheck", {
-        Text = "Wall Check",
-        Default = Aimbot.Settings.WallCheck,
-        Callback = function(v) Aimbot.Settings.WallCheck = v end
-    })
-    
-    LeftGroup:AddToggle("AimbotAliveCheck", {
-        Text = "Alive Check",
-        Default = Aimbot.Settings.AliveCheck,
-        Callback = function(v) Aimbot.Settings.AliveCheck = v end
-    })
-    
-    LeftGroup:AddDivider()
-    LeftGroup:AddLabel("Third Person Mode")
-    
-    LeftGroup:AddToggle("AimbotThirdPerson", {
-        Text = "Enable Third Person",
-        Default = Aimbot.Settings.ThirdPerson,
-        Callback = function(v) Aimbot.Settings.ThirdPerson = v end
-    })
-    
-    LeftGroup:AddSlider("AimbotThirdPersonSens", {
-        Text = "Sensitivity",
-        Default = Aimbot.Settings.ThirdPersonSensitivity,
-        Min = 1,
-        Max = 10,
-        Rounding = 1,
-        Callback = function(v) Aimbot.Settings.ThirdPersonSensitivity = v end
-    })
-    
-    -- FOV Settings
-    RightGroup:AddToggle("FOVEnabled", {
-        Text = "Enable FOV Limit",
-        Default = Aimbot.FOVSettings.Enabled,
-        Callback = function(v) Aimbot.FOVSettings.Enabled = v end
-    })
-    
-    RightGroup:AddToggle("FOVVisible", {
-        Text = "Show FOV Circle",
-        Default = Aimbot.FOVSettings.Visible,
-        Callback = function(v) Aimbot.FOVSettings.Visible = v end
-    })
-    
-    RightGroup:AddToggle("FOVFilled", {
-        Text = "Filled",
-        Default = Aimbot.FOVSettings.Filled,
-        Callback = function(v) Aimbot.FOVSettings.Filled = v end
-    })
-    
-    RightGroup:AddSlider("FOVRadius", {
-        Text = "Radius",
-        Default = Aimbot.FOVSettings.Amount,
-        Min = 10,
-        Max = 500,
-        Rounding = 0,
-        Suffix = "px",
-        Callback = function(v) Aimbot.FOVSettings.Amount = v end
-    })
-    
-    RightGroup:AddSlider("FOVThickness", {
-        Text = "Thickness",
-        Default = Aimbot.FOVSettings.Thickness,
-        Min = 1,
-        Max = 5,
-        Rounding = 0,
-        Callback = function(v) Aimbot.FOVSettings.Thickness = v end
-    })
-    
-    RightGroup:AddSlider("FOVTransparency", {
-        Text = "Transparency",
-        Default = Aimbot.FOVSettings.Transparency,
-        Min = 0,
-        Max = 1,
-        Rounding = 2,
-        Callback = function(v) Aimbot.FOVSettings.Transparency = v end
-    })
-    
-    RightGroup:AddSlider("FOVSides", {
-        Text = "Smoothness",
-        Default = Aimbot.FOVSettings.Sides,
-        Min = 3,
-        Max = 100,
-        Rounding = 0,
-        Callback = function(v) Aimbot.FOVSettings.Sides = v end
-    })
-    
-    local fovColorLabel = RightGroup:AddLabel("FOV Color")
-    fovColorLabel:AddColorPicker("FOVColor", {
-        Default = Aimbot.FOVSettings.Color,
-        Callback = function(c) Aimbot.FOVSettings.Color = c end
-    })
-    
-    local lockedColorLabel = RightGroup:AddLabel("Locked Color")
-    lockedColorLabel:AddColorPicker("FOVLockedColor", {
-        Default = Aimbot.FOVSettings.LockedColor,
-        Callback = function(c) Aimbot.FOVSettings.LockedColor = c end
-    })
-end
-
---===================================================================
--- SILENT AIM TAB
---===================================================================
-
-do
-    local LeftGroup = Tabs.SilentAim:AddLeftGroupbox("Silent Aim Settings")
-    local RightGroup = Tabs.SilentAim:AddRightGroupbox("Advanced")
-    
-    LeftGroup:AddToggle("SilentEnabled", {
-        Text = "Enable Silent Aim",
-        Default = Aimbot.SilentAim.Enabled,
-        Callback = function(v) Aimbot.SilentAim.Enabled = v end
-    })
-    
-    LeftGroup:AddToggle("SilentToggle", {
-        Text = "Toggle Mode",
-        Default = Aimbot.SilentAim.Toggle,
-        Callback = function(v) Aimbot.SilentAim.Toggle = v end
-    })
-    
-    local silentKeyBtn = LeftGroup:AddButton({
-        Text = Aimbot.SilentAim.TriggerKey,
-        Func = function()
-            startBinding(silentKeyBtn, Aimbot.SilentAim.TriggerKey, function(key)
-                Aimbot.SilentAim.TriggerKey = key
-            end)
-        end
-    })
-    silentKeyBtn:AddTooltip("Click to set silent aim hotkey")
-    
-    LeftGroup:AddDivider()
-    LeftGroup:AddLabel("Target Settings")
-    
-    LeftGroup:AddDropdown("SilentPart", {
-        Text = "Target Part",
-        Default = Aimbot.SilentAim.LockPart,
-        Values = PartsList,
-        Callback = function(v) Aimbot.SilentAim.LockPart = v end
-    })
-    
-        LeftGroup:AddToggle("SilentTeamCheck", {
-        Text = "Team Check",
-        Default = Aimbot.SilentAim.TeamCheck,
-        Callback = function(v) Aimbot.SilentAim.TeamCheck = v end
-    })
-    
-    LeftGroup:AddToggle("SilentAliveCheck", {
-        Text = "Alive Check",
-        Default = Aimbot.SilentAim.AliveCheck,
-        Callback = function(v) Aimbot.SilentAim.AliveCheck = v end
-    })
-    
-    LeftGroup:AddToggle("SilentWallCheck", {
-        Text = "Wall Check",
-        Default = Aimbot.SilentAim.WallCheck,
-        Callback = function(v) Aimbot.SilentAim.WallCheck = v end
-    })
-    
-    RightGroup:AddToggle("SilentUseFOV", {
-        Text = "Limit to FOV",
-        Default = Aimbot.SilentAim.UseFOV,
-        Callback = function(v) Aimbot.SilentAim.UseFOV = v end
-    })
-    
-    RightGroup:AddSlider("SilentFOV", {
-        Text = "FOV Radius",
-        Default = Aimbot.SilentAim.FOVAmount,
-        Min = 10,
-        Max = 500,
-        Rounding = 0,
-        Suffix = "px",
-        Callback = function(v) Aimbot.SilentAim.FOVAmount = v end
-    })
-    
-    RightGroup:AddDivider()
-    RightGroup:AddLabel("Prediction")
-    
-    RightGroup:AddSlider("SilentPrediction", {
-        Text = "Prediction",
-        Default = Aimbot.SilentAim.Prediction,
-        Min = 0,
-        Max = 1,
-        Rounding = 2,
-        Callback = function(v) Aimbot.SilentAim.Prediction = v end
-    })
-end
-
---===================================================================
--- VISUALS TAB
---===================================================================
-
-do
-    local LeftGroup = Tabs.Visuals:AddLeftGroupbox("ESP Settings")
-    local RightGroup = Tabs.Visuals:AddRightGroupbox("Visual Elements")
-    
-    -- Main Settings
-    LeftGroup:AddToggle("VisualsEnabled", {
-        Text = "Enable Visuals",
-        Default = WallHack.Settings.Enabled,
-        Callback = function(v) WallHack.Settings.Enabled = v end
-    })
-    
-    LeftGroup:AddToggle("VisualsTeamCheck", {
-        Text = "Team Check",
-        Default = WallHack.Settings.TeamCheck,
-        Callback = function(v) WallHack.Settings.TeamCheck = v end
-    })
-    
-    LeftGroup:AddToggle("VisualsAliveCheck", {
-        Text = "Alive Check",
-        Default = WallHack.Settings.AliveCheck,
-        Callback = function(v) WallHack.Settings.AliveCheck = v end
-    })
-    
-    LeftGroup:AddSlider("VisualsMaxDistance", {
-        Text = "Max Distance",
-        Default = WallHack.Settings.MaxDistance,
-        Min = 0,
-        Max = 5000,
-        Rounding = 0,
-        Suffix = " studs",
-        Callback = function(v) WallHack.Settings.MaxDistance = v end
-    })
-    
-    LeftGroup:AddDivider()
-    LeftGroup:AddLabel("Name Tags")
-    
-    LeftGroup:AddToggle("TagsEnabled", {
-        Text = "Enable Name Tags",
-        Default = WallHack.Visuals.ESPSettings.Enabled,
-        Callback = function(v) WallHack.Visuals.ESPSettings.Enabled = v end
-    })
-    
-    LeftGroup:AddToggle("TagsName", {
-        Text = "Show Name",
-        Default = WallHack.Visuals.ESPSettings.DisplayName,
-        Callback = function(v) WallHack.Visuals.ESPSettings.DisplayName = v end
-    })
-    
-    LeftGroup:AddToggle("TagsHealth", {
-        Text = "Show Health",
-        Default = WallHack.Visuals.ESPSettings.DisplayHealth,
-        Callback = function(v) WallHack.Visuals.ESPSettings.DisplayHealth = v end
-    })
-    
-    LeftGroup:AddToggle("TagsDistance", {
-        Text = "Show Distance",
-        Default = WallHack.Visuals.ESPSettings.DisplayDistance,
-        Callback = function(v) WallHack.Visuals.ESPSettings.DisplayDistance = v end
-    })
-    
-    LeftGroup:AddSlider("TagsSize", {
-        Text = "Text Size",
-        Default = WallHack.Visuals.ESPSettings.TextSize,
-        Min = 8,
-        Max = 24,
-        Rounding = 0,
-        Callback = function(v) WallHack.Visuals.ESPSettings.TextSize = v end
-    })
-    
-    LeftGroup:AddSlider("TagsTransparency", {
-        Text = "Transparency",
-        Default = WallHack.Visuals.ESPSettings.TextTransparency,
-        Min = 0,
-        Max = 1,
-        Rounding = 2,
-        Callback = function(v) WallHack.Visuals.ESPSettings.TextTransparency = v end
-    })
-    
-    local textColorLabel = LeftGroup:AddLabel("Text Color")
-    textColorLabel:AddColorPicker("TagsTextColor", {
-        Default = WallHack.Visuals.ESPSettings.TextColor,
-        Callback = function(c) WallHack.Visuals.ESPSettings.TextColor = c end
-    })
-    
-    local outlineColorLabel = LeftGroup:AddLabel("Outline Color")
-    outlineColorLabel:AddColorPicker("TagsOutlineColor", {
-        Default = WallHack.Visuals.ESPSettings.OutlineColor,
-        Callback = function(c) WallHack.Visuals.ESPSettings.OutlineColor = c end
-    })
-    
-    -- Right Group - Box ESP
-    RightGroup:AddLabel("Box ESP")
-    
-    RightGroup:AddToggle("BoxEnabled", {
-        Text = "Enable Boxes",
-        Default = WallHack.Visuals.BoxSettings.Enabled,
-        Callback = function(v) WallHack.Visuals.BoxSettings.Enabled = v end
-    })
-    
-    RightGroup:AddDropdown("BoxType", {
-        Text = "Box Type",
-        Default = BoxTypes[WallHack.Visuals.BoxSettings.Type] or BoxTypes[1],
-        Values = BoxTypes,
-        Callback = function(v)
-            for i, type in ipairs(BoxTypes) do
-                if type == v then
-                    WallHack.Visuals.BoxSettings.Type = i
-                    break
+            
+            function tab:AddSlider(options, callback)
+                local element = {
+                    Type = "Slider",
+                    Text = options.Text or "",
+                    Flag = options.Flag,
+                    Min = options.Min or 0,
+                    Max = options.Max or 100,
+                    Default = options.Default or 0,
+                    Suffix = options.Suffix or ""
+                }
+                
+                Flags[options.Flag] = element.Default
+                
+                function element:SetValue(value)
+                    Flags[options.Flag] = mathclamp(value, element.Min, element.Max)
+                    if callback then callback(Flags[options.Flag]) end
                 end
+                
+                table.insert(tab.Elements, element)
+                return element
             end
-        end
-    })
-    
-    RightGroup:AddToggle("BoxFilled", {
-        Text = "Filled",
-        Default = WallHack.Visuals.BoxSettings.Filled,
-        Callback = function(v) WallHack.Visuals.BoxSettings.Filled = v end
-    })
-    
-    RightGroup:AddSlider("BoxThickness", {
-        Text = "Thickness",
-        Default = WallHack.Visuals.BoxSettings.Thickness,
-        Min = 1,
-        Max = 5,
-        Rounding = 0,
-        Callback = function(v) WallHack.Visuals.BoxSettings.Thickness = v end
-    })
-    
-    RightGroup:AddSlider("BoxTransparency", {
-        Text = "Transparency",
-        Default = WallHack.Visuals.BoxSettings.Transparency,
-        Min = 0,
-        Max = 1,
-        Rounding = 2,
-        Callback = function(v) WallHack.Visuals.BoxSettings.Transparency = v end
-    })
-    
-    local boxColorLabel = RightGroup:AddLabel("Box Color")
-    boxColorLabel:AddColorPicker("BoxColor", {
-        Default = WallHack.Visuals.BoxSettings.Color,
-        Callback = function(c) WallHack.Visuals.BoxSettings.Color = c end
-    })
-    
-    RightGroup:AddDivider()
-    RightGroup:AddLabel("Tracers")
-    
-    RightGroup:AddToggle("TracersEnabled", {
-        Text = "Enable Tracers",
-        Default = WallHack.Visuals.TracersSettings.Enabled,
-        Callback = function(v) WallHack.Visuals.TracersSettings.Enabled = v end
-    })
-    
-    RightGroup:AddDropdown("TracersType", {
-        Text = "Tracer Origin",
-        Default = TracerTypes[WallHack.Visuals.TracersSettings.Type] or TracerTypes[1],
-        Values = TracerTypes,
-        Callback = function(v)
-            for i, type in ipairs(TracerTypes) do
-                if type == v then
-                    WallHack.Visuals.TracersSettings.Type = i
-                    break
+            
+            function tab:AddDropdown(options, callback)
+                local element = {
+                    Type = "Dropdown",
+                    Text = options.Text or "",
+                    Flag = options.Flag,
+                    Values = options.Values or {},
+                    Default = options.Default or options.Values[1]
+                }
+                
+                Flags[options.Flag] = element.Default
+                
+                function element:SetValue(value)
+                    Flags[options.Flag] = value
+                    if callback then callback(value) end
                 end
+                
+                table.insert(tab.Elements, element)
+                return element
             end
-        end
-    })
-    
-    RightGroup:AddSlider("TracersThickness", {
-        Text = "Thickness",
-        Default = WallHack.Visuals.TracersSettings.Thickness,
-        Min = 1,
-        Max = 5,
-        Rounding = 0,
-        Callback = function(v) WallHack.Visuals.TracersSettings.Thickness = v end
-    })
-    
-    RightGroup:AddSlider("TracersTransparency", {
-        Text = "Transparency",
-        Default = WallHack.Visuals.TracersSettings.Transparency,
-        Min = 0,
-        Max = 1,
-        Rounding = 2,
-        Callback = function(v) WallHack.Visuals.TracersSettings.Transparency = v end
-    })
-    
-    local tracerColorLabel = RightGroup:AddLabel("Tracer Color")
-    tracerColorLabel:AddColorPicker("TracersColor", {
-        Default = WallHack.Visuals.TracersSettings.Color,
-        Callback = function(c) WallHack.Visuals.TracersSettings.Color = c end
-    })
-    
-    RightGroup:AddDivider()
-    RightGroup:AddLabel("Head Dots")
-    
-    RightGroup:AddToggle("HeadDotEnabled", {
-        Text = "Enable Head Dots",
-        Default = WallHack.Visuals.HeadDotSettings.Enabled,
-        Callback = function(v) WallHack.Visuals.HeadDotSettings.Enabled = v end
-    })
-    
-    RightGroup:AddToggle("HeadDotFilled", {
-        Text = "Filled",
-        Default = WallHack.Visuals.HeadDotSettings.Filled,
-        Callback = function(v) WallHack.Visuals.HeadDotSettings.Filled = v end
-    })
-    
-    RightGroup:AddSlider("HeadDotSides", {
-        Text = "Smoothness",
-        Default = WallHack.Visuals.HeadDotSettings.Sides,
-        Min = 3,
-        Max = 60,
-        Rounding = 0,
-        Callback = function(v) WallHack.Visuals.HeadDotSettings.Sides = v end
-    })
-    
-    RightGroup:AddSlider("HeadDotThickness", {
-        Text = "Thickness",
-        Default = WallHack.Visuals.HeadDotSettings.Thickness,
-        Min = 1,
-        Max = 5,
-        Rounding = 0,
-        Callback = function(v) WallHack.Visuals.HeadDotSettings.Thickness = v end
-    })
-    
-    RightGroup:AddSlider("HeadDotTransparency", {
-        Text = "Transparency",
-        Default = WallHack.Visuals.HeadDotSettings.Transparency,
-        Min = 0,
-        Max = 1,
-        Rounding = 2,
-        Callback = function(v) WallHack.Visuals.HeadDotSettings.Transparency = v end
-    })
-    
-    local headDotColorLabel = RightGroup:AddLabel("Head Dot Color")
-    headDotColorLabel:AddColorPicker("HeadDotColor", {
-        Default = WallHack.Visuals.HeadDotSettings.Color,
-        Callback = function(c) WallHack.Visuals.HeadDotSettings.Color = c end
-    })
-end
-
---===================================================================
--- CROSSHAIR TAB
---===================================================================
-
-do
-    local LeftGroup = Tabs.Crosshair:AddLeftGroupbox("Crosshair Settings")
-    local RightGroup = Tabs.Crosshair:AddRightGroupbox("Center Dot")
-    
-    LeftGroup:AddToggle("SystemCursor", {
-        Text = "Show System Cursor",
-        Default = Services.UserInputService.MouseIconEnabled,
-        Callback = function(v) Services.UserInputService.MouseIconEnabled = v end
-    })
-    
-    LeftGroup:AddToggle("CrosshairEnabled", {
-        Text = "Custom Crosshair",
-        Default = WallHack.Crosshair.Settings.Enabled,
-        Callback = function(v) WallHack.Crosshair.Settings.Enabled = v end
-    })
-    
-    LeftGroup:AddDropdown("CrosshairFollow", {
-        Text = "Follow Mode",
-        Default = CrosshairTypes[WallHack.Crosshair.Settings.Type] or CrosshairTypes[1],
-        Values = CrosshairTypes,
-        Callback = function(v)
-            for i, type in ipairs(CrosshairTypes) do
-                if type == v then
-                    WallHack.Crosshair.Settings.Type = i
-                    break
+            
+            function tab:AddColorPicker(options, callback)
+                local element = {
+                    Type = "ColorPicker",
+                    Text = options.Text or "",
+                    Flag = options.Flag,
+                    Default = options.Default or Color3fromRGB(255, 255, 255)
+                }
+                
+                Flags[options.Flag] = element.Default
+                
+                function element:SetValue(value)
+                    Flags[options.Flag] = value
+                    if callback then callback(value) end
                 end
+                
+                table.insert(tab.Elements, element)
+                return element
             end
-        end
-    })
-    
-    LeftGroup:AddSlider("CrosshairSize", {
-        Text = "Size",
-        Default = WallHack.Crosshair.Settings.Size,
-        Min = 4,
-        Max = 40,
-        Rounding = 0,
-        Suffix = "px",
-        Callback = function(v) WallHack.Crosshair.Settings.Size = v end
-    })
-    
-    LeftGroup:AddSlider("CrosshairThickness", {
-        Text = "Thickness",
-        Default = WallHack.Crosshair.Settings.Thickness,
-        Min = 1,
-        Max = 5,
-        Rounding = 0,
-        Callback = function(v) WallHack.Crosshair.Settings.Thickness = v end
-    })
-    
-    LeftGroup:AddSlider("CrosshairGap", {
-        Text = "Gap",
-        Default = WallHack.Crosshair.Settings.GapSize,
-        Min = 0,
-        Max = 20,
-        Rounding = 0,
-        Suffix = "px",
-        Callback = function(v) WallHack.Crosshair.Settings.GapSize = v end
-    })
-    
-    LeftGroup:AddSlider("CrosshairRotation", {
-        Text = "Rotation",
-        Default = WallHack.Crosshair.Settings.Rotation,
-        Min = -180,
-        Max = 180,
-        Rounding = 0,
-        Suffix = "°",
-        Callback = function(v) WallHack.Crosshair.Settings.Rotation = v end
-    })
-    
-    LeftGroup:AddSlider("CrosshairTransparency", {
-        Text = "Transparency",
-        Default = WallHack.Crosshair.Settings.Transparency,
-        Min = 0,
-        Max = 1,
-        Rounding = 2,
-        Callback = function(v) WallHack.Crosshair.Settings.Transparency = v end
-    })
-    
-    local crosshairColorLabel = LeftGroup:AddLabel("Crosshair Color")
-    crosshairColorLabel:AddColorPicker("CrosshairColor", {
-        Default = WallHack.Crosshair.Settings.Color,
-        Callback = function(c) WallHack.Crosshair.Settings.Color = c end
-    })
-    
-    -- Center Dot Settings
-    RightGroup:AddToggle("DotEnabled", {
-        Text = "Enable Center Dot",
-        Default = WallHack.Crosshair.Settings.CenterDot,
-        Callback = function(v) WallHack.Crosshair.Settings.CenterDot = v end
-    })
-    
-    RightGroup:AddToggle("DotFilled", {
-        Text = "Filled",
-        Default = WallHack.Crosshair.Settings.CenterDotFilled,
-        Callback = function(v) WallHack.Crosshair.Settings.CenterDotFilled = v end
-    })
-    
-    RightGroup:AddSlider("DotSize", {
-        Text = "Dot Size",
-        Default = WallHack.Crosshair.Settings.CenterDotSize,
-        Min = 1,
-        Max = 10,
-        Rounding = 0,
-        Suffix = "px",
-        Callback = function(v) WallHack.Crosshair.Settings.CenterDotSize = v end
-    })
-    
-    RightGroup:AddSlider("DotTransparency", {
-        Text = "Transparency",
-        Default = WallHack.Crosshair.Settings.CenterDotTransparency,
-        Min = 0,
-        Max = 1,
-        Rounding = 2,
-        Callback = function(v) WallHack.Crosshair.Settings.CenterDotTransparency = v end
-    })
-    
-    local dotColorLabel = RightGroup:AddLabel("Dot Color")
-    dotColorLabel:AddColorPicker("DotColor", {
-        Default = WallHack.Crosshair.Settings.CenterDotColor,
-        Callback = function(c) WallHack.Crosshair.Settings.CenterDotColor = c end
-    })
-end
-
---===================================================================
--- CONFIG SYSTEM
---===================================================================
-
-local ConfigName = ""
-local ConfigList = {}
-local configDropdown = nil
-
-local function getConfigPath(name)
-    return ("%s/%s.json"):format(CONFIG_FOLDER, name)
-end
-
-local function refreshConfigList()
-    if not FS_SUPPORTED then return {} end
-    
-    local names = {}
-    local success, files = pcall(env.listfiles, CONFIG_FOLDER)
-    
-    if success then
-        for _, file in ipairs(files) do
-            local name = file:match("([^/\\]+)%.json$")
-            if name then
-                table.insert(names, name)
+            
+            function tab:AddButton(options, callback)
+                local element = {
+                    Type = "Button",
+                    Text = options.Text or ""
+                }
+                
+                function element:Click()
+                    if callback then callback() end
+                end
+                
+                table.insert(tab.Elements, element)
+                return element
             end
-        end
-    end
-    
-    ConfigList = names
-    return names
-end
-
-local function saveConfig()
-    if not FS_SUPPORTED then
-        Library:Notify("File system not supported", 3)
-        return
-    end
-    
-    if not ConfigName or ConfigName == "" then
-        Library:Notify("Enter a config name", 3)
-        return
-    end
-    
-    local config = {
-        aimbot = {
-            enabled = Aimbot.Settings.Enabled,
-            toggle = Aimbot.Settings.Toggle,
-            triggerKey = Aimbot.Settings.TriggerKey,
-            sensitivity = Aimbot.Settings.Sensitivity,
-            lockPart = Aimbot.Settings.LockPart,
-            teamCheck = Aimbot.Settings.TeamCheck,
-            wallCheck = Aimbot.Settings.WallCheck,
-            aliveCheck = Aimbot.Settings.AliveCheck,
-            thirdPerson = Aimbot.Settings.ThirdPerson,
-            thirdPersonSens = Aimbot.Settings.ThirdPersonSensitivity,
-        },
-        fov = {
-            enabled = Aimbot.FOVSettings.Enabled,
-            visible = Aimbot.FOVSettings.Visible,
-            amount = Aimbot.FOVSettings.Amount,
-            filled = Aimbot.FOVSettings.Filled,
-            transparency = Aimbot.FOVSettings.Transparency,
-            sides = Aimbot.FOVSettings.Sides,
-            thickness = Aimbot.FOVSettings.Thickness,
-            color = {Aimbot.FOVSettings.Color.R, Aimbot.FOVSettings.Color.G, Aimbot.FOVSettings.Color.B},
-            lockedColor = {Aimbot.FOVSettings.LockedColor.R, Aimbot.FOVSettings.LockedColor.G, Aimbot.FOVSettings.LockedColor.B},
-        },
-        silent = {
-            enabled = Aimbot.SilentAim.Enabled,
-            triggerKey = Aimbot.SilentAim.TriggerKey,
-            toggle = Aimbot.SilentAim.Toggle,
-            teamCheck = Aimbot.SilentAim.TeamCheck,
-            aliveCheck = Aimbot.SilentAim.AliveCheck,
-            wallCheck = Aimbot.SilentAim.WallCheck,
-            lockPart = Aimbot.SilentAim.LockPart,
-            useFOV = Aimbot.SilentAim.UseFOV,
-            fovAmount = Aimbot.SilentAim.FOVAmount,
-            prediction = Aimbot.SilentAim.Prediction,
-        },
-        visuals = {
-            enabled = WallHack.Settings.Enabled,
-            teamCheck = WallHack.Settings.TeamCheck,
-            aliveCheck = WallHack.Settings.AliveCheck,
-            maxDistance = WallHack.Settings.MaxDistance,
-            esp = {
-                enabled = WallHack.Visuals.ESPSettings.Enabled,
-                displayName = WallHack.Visuals.ESPSettings.DisplayName,
-                displayHealth = WallHack.Visuals.ESPSettings.DisplayHealth,
-                displayDistance = WallHack.Visuals.ESPSettings.DisplayDistance,
-                textSize = WallHack.Visuals.ESPSettings.TextSize,
-                textTransparency = WallHack.Visuals.ESPSettings.TextTransparency,
-                textColor = {WallHack.Visuals.ESPSettings.TextColor.R, WallHack.Visuals.ESPSettings.TextColor.G
-                               outlineColor = {WallHack.Visuals.ESPSettings.OutlineColor.R, WallHack.Visuals.ESPSettings.OutlineColor.G, WallHack.Visuals.ESPSettings.OutlineColor.B},
-            },
-            box = {
-                enabled = WallHack.Visuals.BoxSettings.Enabled,
-                type = WallHack.Visuals.BoxSettings.Type,
-                filled = WallHack.Visuals.BoxSettings.Filled,
-                thickness = WallHack.Visuals.BoxSettings.Thickness,
-                transparency = WallHack.Visuals.BoxSettings.Transparency,
-                increase = WallHack.Visuals.BoxSettings.Increase,
-                color = {WallHack.Visuals.BoxSettings.Color.R, WallHack.Visuals.BoxSettings.Color.G, WallHack.Visuals.BoxSettings.Color.B},
-            },
-            tracer = {
-                enabled = WallHack.Visuals.TracersSettings.Enabled,
-                type = WallHack.Visuals.TracersSettings.Type,
-                thickness = WallHack.Visuals.TracersSettings.Thickness,
-                transparency = WallHack.Visuals.TracersSettings.Transparency,
-                color = {WallHack.Visuals.TracersSettings.Color.R, WallHack.Visuals.TracersSettings.Color.G, WallHack.Visuals.TracersSettings.Color.B},
-            },
-            headDot = {
-                enabled = WallHack.Visuals.HeadDotSettings.Enabled,
-                filled = WallHack.Visuals.HeadDotSettings.Filled,
-                sides = WallHack.Visuals.HeadDotSettings.Sides,
-                thickness = WallHack.Visuals.HeadDotSettings.Thickness,
-                transparency = WallHack.Visuals.HeadDotSettings.Transparency,
-                color = {WallHack.Visuals.HeadDotSettings.Color.R, WallHack.Visuals.HeadDotSettings.Color.G, WallHack.Visuals.HeadDotSettings.Color.B},
-            },
-        },
-        crosshair = {
-            enabled = WallHack.Crosshair.Settings.Enabled,
-            type = WallHack.Crosshair.Settings.Type,
-            size = WallHack.Crosshair.Settings.Size,
-            thickness = WallHack.Crosshair.Settings.Thickness,
-            gapSize = WallHack.Crosshair.Settings.GapSize,
-            rotation = WallHack.Crosshair.Settings.Rotation,
-            transparency = WallHack.Crosshair.Settings.Transparency,
-            color = {WallHack.Crosshair.Settings.Color.R, WallHack.Crosshair.Settings.Color.G, WallHack.Crosshair.Settings.Color.B},
-            centerDot = WallHack.Crosshair.Settings.CenterDot,
-            centerDotFilled = WallHack.Crosshair.Settings.CenterDotFilled,
-            centerDotSize = WallHack.Crosshair.Settings.CenterDotSize,
-            centerDotTransparency = WallHack.Crosshair.Settings.CenterDotTransparency,
-            centerDotColor = {WallHack.Crosshair.Settings.CenterDotColor.R, WallHack.Crosshair.Settings.CenterDotColor.G, WallHack.Crosshair.Settings.CenterDotColor.B},
-        },
-    }
-    
-    local success, json = pcall(function()
-        return Services.HttpService:JSONEncode(config)
-    end)
-    
-    if success then
-        pcall(env.writefile, getConfigPath(ConfigName), json)
-        Library:Notify(("Config saved: %s"):format(ConfigName), 3)
-        refreshConfigList()
-        if configDropdown then
-            configDropdown:SetValues(ConfigList)
-        end
-    else
-        Library:Notify("Failed to save config", 3)
-    end
-end
-
-local function loadConfig()
-    if not FS_SUPPORTED then
-        Library:Notify("File system not supported", 3)
-        return
-    end
-    
-    if not ConfigName or ConfigName == "" then
-        Library:Notify("Select a config first", 3)
-        return
-    end
-    
-    local path = getConfigPath(ConfigName)
-    if not pcall(env.isfile, path) then
-        Library:Notify("Config not found", 3)
-        return
-    end
-    
-    local content = env.readfile(path)
-    if not content or content == "" then
-        Library:Notify("Config is empty", 3)
-        return
-    end
-    
-    local success, data = pcall(function()
-        return Services.HttpService:JSONDecode(content)
-    end)
-    
-    if not success or not data then
-        Library:Notify("Failed to load config", 3)
-        return
-    end
-    
-    -- Load Aimbot
-    if data.aimbot then
-        local a = data.aimbot
-        Aimbot.Settings.Enabled = a.enabled
-        Aimbot.Settings.Toggle = a.toggle
-        Aimbot.Settings.TriggerKey = a.triggerKey
-        Aimbot.Settings.Sensitivity = a.sensitivity
-        Aimbot.Settings.LockPart = a.lockPart
-        Aimbot.Settings.TeamCheck = a.teamCheck
-        Aimbot.Settings.WallCheck = a.wallCheck
-        Aimbot.Settings.AliveCheck = a.aliveCheck
-        Aimbot.Settings.ThirdPerson = a.thirdPerson
-        Aimbot.Settings.ThirdPersonSensitivity = a.thirdPersonSens
-    end
-    
-    -- Load FOV
-    if data.fov then
-        local f = data.fov
-        Aimbot.FOVSettings.Enabled = f.enabled
-        Aimbot.FOVSettings.Visible = f.visible
-        Aimbot.FOVSettings.Amount = f.amount
-        Aimbot.FOVSettings.Filled = f.filled
-        Aimbot.FOVSettings.Transparency = f.transparency
-        Aimbot.FOVSettings.Sides = f.sides
-        Aimbot.FOVSettings.Thickness = f.thickness
-        if f.color then
-            Aimbot.FOVSettings.Color = Color3.new(f.color[1], f.color[2], f.color[3])
-        end
-        if f.lockedColor then
-            Aimbot.FOVSettings.LockedColor = Color3.new(f.lockedColor[1], f.lockedColor[2], f.lockedColor[3])
-        end
-    end
-    
-    -- Load Silent Aim
-    if data.silent then
-        local s = data.silent
-        Aimbot.SilentAim.Enabled = s.enabled
-        Aimbot.SilentAim.TriggerKey = s.triggerKey
-        Aimbot.SilentAim.Toggle = s.toggle
-        Aimbot.SilentAim.TeamCheck = s.teamCheck
-        Aimbot.SilentAim.AliveCheck = s.aliveCheck
-        Aimbot.SilentAim.WallCheck = s.wallCheck
-        Aimbot.SilentAim.LockPart = s.lockPart
-        Aimbot.SilentAim.UseFOV = s.useFOV
-        Aimbot.SilentAim.FOVAmount = s.fovAmount
-        Aimbot.SilentAim.Prediction = s.prediction
-    end
-    
-    -- Load Visuals
-    if data.visuals then
-        local v = data.visuals
-        WallHack.Settings.Enabled = v.enabled
-        WallHack.Settings.TeamCheck = v.teamCheck
-        WallHack.Settings.AliveCheck = v.aliveCheck
-        WallHack.Settings.MaxDistance = v.maxDistance
-        
-        if v.esp then
-            local e = v.esp
-            WallHack.Visuals.ESPSettings.Enabled = e.enabled
-            WallHack.Visuals.ESPSettings.DisplayName = e.displayName
-            WallHack.Visuals.ESPSettings.DisplayHealth = e.displayHealth
-            WallHack.Visuals.ESPSettings.DisplayDistance = e.displayDistance
-            WallHack.Visuals.ESPSettings.TextSize = e.textSize
-            WallHack.Visuals.ESPSettings.TextTransparency = e.textTransparency
-            if e.textColor then
-                WallHack.Visuals.ESPSettings.TextColor = Color3.new(e.textColor[1], e.textColor[2], e.textColor[3])
+            
+            function tab:AddLabel(text)
+                local element = {
+                    Type = "Label",
+                    Text = text
+                }
+                
+                table.insert(tab.Elements, element)
+                return element
             end
-            if e.outlineColor then
-                WallHack.Visuals.ESPSettings.OutlineColor = Color3.new(e.outlineColor[1], e.outlineColor[2], e.outlineColor[3])
-            end
+            
+            table.insert(window.Tabs, tab)
+            return tab
         end
         
-        if v.box then
-            local b = v.box
-            WallHack.Visuals.BoxSettings.Enabled = b.enabled
-            WallHack.Visuals.BoxSettings.Type = b.type
-            WallHack.Visuals.BoxSettings.Filled = b.filled
-            WallHack.Visuals.BoxSettings.Thickness = b.thickness
-            WallHack.Visuals.BoxSettings.Transparency = b.transparency
-            WallHack.Visuals.BoxSettings.Increase = b.increase
-            if b.color then
-                WallHack.Visuals.BoxSettings.Color = Color3.new(b.color[1], b.color[2], b.color[3])
-            end
-        end
-        
-        if v.tracer then
-            local t = v.tracer
-            WallHack.Visuals.TracersSettings.Enabled = t.enabled
-            WallHack.Visuals.TracersSettings.Type = t.type
-            WallHack.Visuals.TracersSettings.Thickness = t.thickness
-            WallHack.Visuals.TracersSettings.Transparency = t.transparency
-            if t.color then
-                WallHack.Visuals.TracersSettings.Color = Color3.new(t.color[1], t.color[2], t.color[3])
-            end
-        end
-        
-        if v.headDot then
-            local h = v.headDot
-            WallHack.Visuals.HeadDotSettings.Enabled = h.enabled
-            WallHack.Visuals.HeadDotSettings.Filled = h.filled
-            WallHack.Visuals.HeadDotSettings.Sides = h.sides
-            WallHack.Visuals.HeadDotSettings.Thickness = h.thickness
-            WallHack.Visuals.HeadDotSettings.Transparency = h.transparency
-            if h.color then
-                WallHack.Visuals.HeadDotSettings.Color = Color3.new(h.color[1], h.color[2], h.color[3])
-            end
-        end
+        return window
     end
     
-    -- Load Crosshair
-    if data.crosshair then
-        local c = data.crosshair
-        WallHack.Crosshair.Settings.Enabled = c.enabled
-        WallHack.Crosshair.Settings.Type = c.type
-        WallHack.Crosshair.Settings.Size = c.size
-        WallHack.Crosshair.Settings.Thickness = c.thickness
-        WallHack.Crosshair.Settings.GapSize = c.gapSize
-        WallHack.Crosshair.Settings.Rotation = c.rotation
-        WallHack.Crosshair.Settings.Transparency = c.transparency
-        WallHack.Crosshair.Settings.CenterDot = c.centerDot
-        WallHack.Crosshair.Settings.CenterDotFilled = c.centerDotFilled
-        WallHack.Crosshair.Settings.CenterDotSize = c.centerDotSize
-        WallHack.Crosshair.Settings.CenterDotTransparency = c.centerDotTransparency
-        if c.color then
-            WallHack.Crosshair.Settings.Color = Color3.new(c.color[1], c.color[2], c.color[3])
-        end
-        if c.centerDotColor then
-            WallHack.Crosshair.Settings.CenterDotColor = Color3.new(c.centerDotColor[1], c.centerDotColor[2], c.centerDotColor[3])
-        end
-    end
-    
-    -- Update UI elements
-    pcall(function()
-        if aimbotKeyBtn then aimbotKeyBtn:SetText(Aimbot.Settings.TriggerKey) end
-        if silentKeyBtn then silentKeyBtn:SetText(Aimbot.SilentAim.TriggerKey) end
-    end)
-    
-    Library:Notify(("Config loaded: %s"):format(ConfigName), 3)
+    Library = ActualLib
 end
 
-local function deleteConfig()
-    if not FS_SUPPORTED then
-        Library:Notify("File system not supported", 3)
-        return
-    end
-    
-    if not ConfigName or ConfigName == "" then
-        Library:Notify("Select a config first", 3)
-        return
-    end
-    
-    local path = getConfigPath(ConfigName)
-    if pcall(env.isfile, path) then
-        pcall(env.delfile, path)
-        Library:Notify(("Config deleted: %s"):format(ConfigName), 3)
-        refreshConfigList()
-        if configDropdown then
-            configDropdown:SetValues(ConfigList)
-        end
-    end
-end
+--// Create Main Window
+local MainWindow = Library:CreateWindow("AirHub V2")
+local MainTabs = {}
 
---===================================================================
--- CONFIG TAB UI
---===================================================================
+--// Main Tab
+MainTabs.Main = MainWindow:AddTab("Main")
 
-do
-    local LeftGroup = Tabs.Config:AddLeftGroupbox("Config Manager")
-    local RightGroup = Tabs.Config:AddRightGroupbox("Module Controls")
-    
-    LeftGroup:AddInput("ConfigNameInput", {
-        Text = "Config Name",
-        Default = "",
-        Placeholder = "Enter config name...",
-        Callback = function(v) ConfigName = v end
-    })
-    
-    configDropdown = LeftGroup:AddDropdown("ConfigSelector", {
-        Text = "Select Config",
-        Default = "",
-        Values = {},
-        Callback = function(v) ConfigName = v end
-    })
-    
-    LeftGroup:AddButton({
-        Text = "Refresh List",
-        Func = function()
-            refreshConfigList()
-            configDropdown:SetValues(ConfigList)
-            Library:Notify("Config list refreshed", 2)
-        end
-    })
-    
-    LeftGroup:AddDivider()
-    LeftGroup:AddButton({Text = "Save Config", Func = saveConfig})
-    LeftGroup:AddButton({Text = "Load Config", Func = loadConfig})
-    LeftGroup:AddButton({Text = "Delete Config", Func = deleteConfig})
-    
-    -- Module Controls
-    RightGroup:AddButton({
-        Text = "Reset All Settings",
-        Func = function()
-            Aimbot = getSafeAimbot()
-            WallHack = getSafeWallHack()
-            env.genv.AirHub.Aimbot = Aimbot
-            env.genv.AirHub.WallHack = WallHack
-            Library:Notify("Settings reset to default", 3)
-        end
-    })
-    
-    RightGroup:AddButton({
-        Text = "Unload AirHub",
-        Func = function()
-            task.spawn(function()
-                pcall(Library.Unload, Library)
-                env.genv.AirHub = nil
-            end)
-        end
-    })
-end
-
---===================================================================
--- THEME MANAGER
---===================================================================
-
-if ThemeManager then
-    pcall(function()
-        ThemeManager:SetLibrary(Library)
-        ThemeManager:ApplyToTab(Tabs.Config)
-    end)
-end
-
---===================================================================
--- FINAL SETUP
---===================================================================
-
--- Initial config list refresh
-task.spawn(function()
-    safeWait(0.5)
-    refreshConfigList()
-    if configDropdown then
-        configDropdown:SetValues(ConfigList)
+MainTabs.Main:AddToggle({
+    Text = "Enable Aimbot",
+    Flag = "Aimbot_Enabled",
+    Default = false
+}, function(value)
+    if Aimbot and Aimbot.Settings then
+        Aimbot.Settings.Enabled = value
     end
 end)
 
--- Success notification
-Library:Notify("AirHub V3 loaded successfully", 3)
+MainTabs.Main:AddToggle({
+    Text = "Enable Wallhack",
+    Flag = "Wallhack_Enabled",
+    Default = false
+}, function(value)
+    if WallHack and WallHack.Settings then
+        WallHack.Settings.Enabled = value
+    end
+end)
 
--- Return success
-return true 
+MainTabs.Main:AddDropdown({
+    Text = "Aimbot Lock Part",
+    Flag = "Aimbot_LockPart",
+    Values = {"Head", "Torso", "HumanoidRootPart", "UpperTorso", "LowerTorso"},
+    Default = "Head"
+}, function(value)
+    if Aimbot and Aimbot.Settings then
+        Aimbot.Settings.LockPart = value
+    end
+end)
+
+MainTabs.Main:AddSlider({
+    Text = "Aimbot Sensitivity",
+    Flag = "Aimbot_Sensitivity",
+    Min = 0,
+    Max = 2,
+    Default = 0,
+    Suffix = "s"
+}, function(value)
+    if Aimbot and Aimbot.Settings then
+        Aimbot.Settings.Sensitivity = value
+    end
+end)
+
+MainTabs.Main:AddToggle({
+    Text = "Aimbot Toggle Mode",
+    Flag = "Aimbot_Toggle",
+    Default = false
+}, function(value)
+    if Aimbot and Aimbot.Settings then
+        Aimbot.Settings.Toggle = value
+    end
+end)
+
+MainTabs.Main:AddDropdown({
+    Text = "Aimbot Trigger Key",
+    Flag = "Aimbot_TriggerKey",
+    Values = {"MouseButton1", "MouseButton2", "MouseButton3", "E", "Q", "F", "C", "X", "Z", "V"},
+    Default = "MouseButton2"
+}, function(value)
+    if Aimbot and Aimbot.Settings then
+        Aimbot.Settings.TriggerKey = value
+    end
+end)
+
+--// Aimbot Settings Tab
+MainTabs.Aimbot = MainWindow:AddTab("Aimbot")
+
+MainTabs.Aimbot:AddToggle({
+    Text = "Team Check",
+    Flag = "Aimbot_TeamCheck",
+    Default = false
+}, function(value)
+    if Aimbot and Aimbot.Settings then
+        Aimbot.Settings.TeamCheck = value
+    end
+end)
+
+MainTabs.Aimbot:AddToggle({
+    Text = "Alive Check",
+    Flag = "Aimbot_AliveCheck",
+    Default = true
+}, function(value)
+    if Aimbot and Aimbot.Settings then
+        Aimbot.Settings.AliveCheck = value
+    end
+end)
+
+MainTabs.Aimbot:AddToggle({
+    Text = "Wall Check",
+    Flag = "Aimbot_WallCheck",
+    Default = false
+}, function(value)
+    if Aimbot and Aimbot.Settings then
+        Aimbot.Settings.WallCheck = value
+    end
+end)
+
+MainTabs.Aimbot:AddToggle({
+    Text = "Third Person Mode",
+    Flag = "Aimbot_ThirdPerson",
+    Default = false
+}, function(value)
+    if Aimbot and Aimbot.Settings then
+        Aimbot.Settings.ThirdPerson = value
+    end
+end)
+
+MainTabs.Aimbot:AddSlider({
+    Text = "Third Person Sensitivity",
+    Flag = "Aimbot_ThirdPersonSens",
+    Min = 1,
+    Max = 10,
+    Default = 3
+}, function(value)
+    if Aimbot and Aimbot.Settings then
+        Aimbot.Settings.ThirdPersonSensitivity = value
+    end
+end)
+
+--// FOV Settings
+MainTabs.Aimbot:AddLabel("--- FOV Settings ---")
+
+MainTabs.Aimbot:AddToggle({
+    Text = "Enable FOV",
+    Flag = "FOV_Enabled",
+    Default = true
+}, function(value)
+    if Aimbot and Aimbot.FOVSettings then
+        Aimbot.FOVSettings.Enabled = value
+    end
+end)
+
+MainTabs.Aimbot:AddToggle({
+    Text = "Show FOV Circle",
+    Flag = "FOV_Visible",
+    Default = true
+}, function(value)
+    if Aimbot and Aimbot.FOVSettings then
+        Aimbot.FOVSettings.Visible = value
+    end
+end)
+
+MainTabs.Aimbot:AddSlider({
+    Text = "FOV Size",
+    Flag = "FOV_Amount",
+    Min = 30,
+    Max = 500,
+    Default = 90,
+    Suffix = "px"
+}, function(value)
+    if Aimbot and Aimbot.FOVSettings then
+        Aimbot.FOVSettings.Amount = value
+    end
+end)
+
+MainTabs.Aimbot:AddSlider({
+    Text = "FOV Transparency",
+    Flag = "FOV_Transparency",
+    Min = 0,
+    Max = 1,
+    Default = 0.5,
+    Suffix = ""
+}, function(value)
+    if Aimbot and Aimbot.FOVSettings then
+        Aimbot.FOVSettings.Transparency = value
+    end
+end)
+
+MainTabs.Aimbot:AddSlider({
+    Text = "FOV Thickness",
+    Flag = "FOV_Thickness",
+    Min = 1,
+    Max = 5,
+    Default = 1
+}, function(value)
+    if Aimbot and Aimbot.FOVSettings then
+        Aimbot.FOVSettings.Thickness = value
+    end
+end)
+
+MainTabs.Aimbot:AddToggle({
+    Text = "FOV Filled",
+    Flag = "FOV_Filled",
+    Default = false
+}, function(value)
+    if Aimbot and Aimbot.FOVSettings then
+        Aimbot.FOVSettings.Filled = value
+    end
+end)
+
+MainTabs.Aimbot:AddColorPicker({
+    Text = "FOV Color",
+    Flag = "FOV_Color",
+    Default = Color3fromRGB(255, 255, 255)
+}, function(value)
+    if Aimbot and Aimbot.FOVSettings then
+        Aimbot.FOVSettings.Color = value
+    end
+end)
+
+MainTabs.Aimbot:AddColorPicker({
+    Text = "FOV Locked Color",
+    Flag = "FOV_LockedColor",
+    Default = Color3fromRGB(255, 70, 70)
+}, function(value)
+    if Aimbot and Aimbot.FOVSettings then
+        Aimbot.FOVSettings.LockedColor = value
+    end
+end)
+
+--// Wallhack Settings Tab
+MainTabs.Wallhack = MainWindow:AddTab("Wallhack")
+
+--// General Settings
+MainTabs.Wallhack:AddLabel("--- General Settings ---")
+
+MainTabs.Wallhack:AddToggle({
+    Text = "Team Check",
+    Flag = "Wallhack_TeamCheck",
+    Default = false
+}, function(value)
+    if WallHack and WallHack.Settings then
+        WallHack.Settings.TeamCheck = value
+    end
+end)
+
+MainTabs.Wallhack:AddToggle({
+    Text = "Alive Check",
+    Flag = "Wallhack_AliveCheck",
+    Default = true
+}, function(value)
+    if WallHack and WallHack.Settings then
+        WallHack.Settings.AliveCheck = value
+    end
+end)
+
+MainTabs.Wallhack:AddSlider({
+    Text = "Max Distance",
+    Flag = "Wallhack_MaxDistance",
+    Min = 0,
+    Max = 5000,
+    Default = 1000,
+    Suffix = "studs"
+}, function(value)
+    if WallHack and WallHack.Settings then
+        WallHack.Settings.MaxDistance = value
+    end
+end)
+
+--// ESP Settings
+MainTabs.Wallhack:AddLabel("--- ESP Settings ---")
+
+MainTabs.Wallhack:AddToggle({
+    Text = "Enable ESP",
+    Flag = "ESP_Enabled",
+    Default = true
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.ESPSettings then
+        WallHack.Visuals.ESPSettings.Enabled = value
+    end
+end)
+
+MainTabs.Wallhack:AddToggle({
+    Text = "Display Name",
+    Flag = "ESP_DisplayName",
+    Default = true
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.ESPSettings then
+        WallHack.Visuals.ESPSettings.DisplayName = value
+    end
+end)
+
+MainTabs.Wallhack:AddToggle({
+    Text = "Display Health",
+    Flag = "ESP_DisplayHealth",
+    Default = true
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.ESPSettings then
+        WallHack.Visuals.ESPSettings.DisplayHealth = value
+    end
+end)
+
+MainTabs.Wallhack:AddToggle({
+    Text = "Display Distance",
+    Flag = "ESP_DisplayDistance",
+    Default = true
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.ESPSettings then
+        WallHack.Visuals.ESPSettings.DisplayDistance = value
+    end
+end)
+
+MainTabs.Wallhack:AddColorPicker({
+    Text = "ESP Text Color",
+    Flag = "ESP_TextColor",
+    Default = Color3fromRGB(255, 255, 255)
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.ESPSettings then
+        WallHack.Visuals.ESPSettings.TextColor = value
+    end
+end)
+
+MainTabs.Wallhack:AddSlider({
+    Text = "ESP Text Size",
+    Flag = "ESP_TextSize",
+    Min = 10,
+    Max = 30,
+    Default = 14
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.ESPSettings then
+        WallHack.Visuals.ESPSettings.TextSize = value
+    end
+end)
+
+MainTabs.Wallhack:AddSlider({
+    Text = "ESP Transparency",
+    Flag = "ESP_Transparency",
+    Min = 0,
+    Max = 1,
+    Default = 0.7
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.ESPSettings then
+        WallHack.Visuals.ESPSettings.TextTransparency = value
+    end
+end)
+
+--// Tracers
+MainTabs.Wallhack:AddLabel("--- Tracer Settings ---")
+
+MainTabs.Wallhack:AddToggle({
+    Text = "Enable Tracers",
+    Flag = "Tracers_Enabled",
+    Default = true
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.TracersSettings then
+        WallHack.Visuals.TracersSettings.Enabled = value
+    end
+end)
+
+MainTabs.Wallhack:AddDropdown({
+    Text = "Tracer Type",
+    Flag = "Tracers_Type",
+    Values = {"Bottom", "Center", "Mouse"},
+    Default = "Bottom"
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.TracersSettings then
+        local typeNum = value == "Bottom" and 1 or value == "Center" and 2 or 3
+        WallHack.Visuals.TracersSettings.Type = typeNum
+    end
+end)
+
+MainTabs.Wallhack:AddColorPicker({
+    Text = "Tracer Color",
+    Flag = "Tracers_Color",
+    Default = Color3fromRGB(255, 255, 255)
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.TracersSettings then
+        WallHack.Visuals.TracersSettings.Color = value
+    end
+end)
+
+--// Boxes
+MainTabs.Wallhack:AddLabel("--- Box Settings ---")
+
+MainTabs.Wallhack:AddToggle({
+    Text = "Enable Boxes",
+    Flag = "Box_Enabled",
+    Default = true
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.BoxSettings then
+        WallHack.Visuals.BoxSettings.Enabled = value
+    end
+end)
+
+MainTabs.Wallhack:AddDropdown({
+    Text = "Box Type",
+    Flag = "Box_Type",
+    Values = {"3D Box", "2D Box"},
+    Default = "3D Box"
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.BoxSettings then
+        WallHack.Visuals.BoxSettings.Type = value == "3D Box" and 1 or 2
+    end
+end)
+
+MainTabs.Wallhack:AddColorPicker({
+    Text = "Box Color",
+    Flag = "Box_Color",
+    Default = Color3fromRGB(255, 255, 255)
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.BoxSettings then
+        WallHack.Visuals.BoxSettings.Color = value
+    end
+end)
+
+--// Head Dot
+MainTabs.Wallhack:AddLabel("--- Head Dot Settings ---")
+
+MainTabs.Wallhack:AddToggle({
+    Text = "Enable Head Dot",
+    Flag = "HeadDot_Enabled",
+    Default = true
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.HeadDotSettings then
+        WallHack.Visuals.HeadDotSettings.Enabled = value
+    end
+end)
+
+MainTabs.Wallhack:AddColorPicker({
+    Text = "Head Dot Color",
+    Flag = "HeadDot_Color",
+    Default = Color3fromRGB(255, 255, 255)
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.HeadDotSettings then
+        WallHack.Visuals.HeadDotSettings.Color = value
+    end
+end)
+
+--// Chams
+MainTabs.Wallhack:AddLabel("--- Chams Settings ---")
+
+MainTabs.Wallhack:AddToggle({
+    Text = "Enable Chams",
+    Flag = "Chams_Enabled",
+    Default = false
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.ChamsSettings then
+        WallHack.Visuals.ChamsSettings.Enabled = value
+    end
+end)
+
+MainTabs.Wallhack:AddColorPicker({
+    Text = "Chams Color",
+    Flag = "Chams_Color",
+    Default = Color3fromRGB(255, 255, 255)
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.ChamsSettings then
+        WallHack.Visuals.ChamsSettings.Color = value
+    end
+end)
+
+MainTabs.Wallhack:AddSlider({
+    Text = "Chams Transparency",
+    Flag = "Chams_Transparency",
+    Min = 0,
+    Max = 1,
+    Default = 0.2
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.ChamsSettings then
+        WallHack.Visuals.ChamsSettings.Transparency = value
+    end
+end)
+
+MainTabs.Wallhack:AddToggle({
+    Text = "Full Body Chams",
+    Flag = "Chams_EntireBody",
+    Default = false
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.ChamsSettings then
+        WallHack.Visuals.ChamsSettings.EntireBody = value
+    end
+end)
+
+--// Health Bar
+MainTabs.Wallhack:AddLabel("--- Health Bar Settings ---")
+
+MainTabs.Wallhack:AddToggle({
+    Text = "Enable Health Bar",
+    Flag = "HealthBar_Enabled",
+    Default = false
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.HealthBarSettings then
+        WallHack.Visuals.HealthBarSettings.Enabled = value
+    end
+end)
+
+MainTabs.Wallhack:AddDropdown({
+    Text = "Health Bar Position",
+    Flag = "HealthBar_Type",
+    Values = {"Top", "Bottom", "Left", "Right"},
+    Default = "Left"
+}, function(value)
+    if WallHack and WallHack.Visuals and WallHack.Visuals.HealthBarSettings then
+        local typeNum = value == "Top" and 1 or value == "Bottom" and 2 or value == "Left" and 3 or 4
+        WallHack.Visuals.HealthBarSettings.Type = typeNum
+    end
+end)
+
+--// Crosshair
+MainTabs.Wallhack:AddLabel("--- Crosshair Settings ---")
+
+MainTabs.Wallhack:AddToggle({
+    Text = "Enable Custom Crosshair",
+    Flag = "Crosshair_Enabled",
+    Default = false
+}, function(value)
+    if WallHack and WallHack.Crosshair and WallHack.Crosshair.Settings then
+        WallHack.Crosshair.Settings.Enabled = value
+    end
+end)
+
+MainTabs.Wallhack:AddColorPicker({
+    Text = "Crosshair Color",
+    Flag = "Crosshair_Color",
+    Default = Color3fromRGB(0, 255, 0)
+}, function(value)
+    if WallHack and WallHack.Crosshair and WallHack.Crosshair.Settings then
+        WallHack.Crosshair.Settings.Color = value
+    end
+end)
+
+MainTabs.Wallhack:AddSlider({
+    Text = "Crosshair Size",
+    Flag = "Crosshair_Size",
+    Min = 5,
+    Max = 30,
+    Default = 12
+}, function(value)
+    if WallHack and WallHack.Crosshair and WallHack.Crosshair.Settings then
+        WallHack.Crosshair.Settings.Size = value
+    end
+end)
+
+--// Utility Tab
+MainTabs.Utility = MainWindow:AddTab("Utility")
+
+MainTabs.Utility:AddButton({
+    Text = "Reset All Settings"
+}, function()
+    if Aimbot and Aimbot.Functions and Aimbot.Functions.ResetSettings then
+        Aimbot.Functions:ResetSettings()
+    end
+    
+    if WallHack and WallHack.Functions and WallHack.Functions.ResetSettings then
+        WallHack.Functions:ResetSettings()
+    end
+    
+    -- Reset flags
+    for flag, _ in pairs(Flags) do
+        if flag == "Aimbot_Enabled" then Flags[flag] = false
+        elseif flag == "Wallhack_Enabled" then Flags[flag] = false
+        elseif flag == "Aimbot_LockPart" then Flags[flag] = "Head"
+        elseif flag == "Aimbot_Sensitivity" then Flags[flag] = 0
+        elseif flag == "Aimbot_Toggle" then Flags[flag] = false
+        elseif flag == "Aimbot_TriggerKey" then Flags[flag] = "MouseButton2"
+        elseif flag == "Aimbot_TeamCheck" then Flags[flag] = false
+        elseif flag == "Aimbot_AliveCheck" then Flags[flag] = true
+        elseif flag == "Aimbot_WallCheck" then Flags[flag] = false
+        elseif flag == "Aimbot_ThirdPerson" then Flags[flag] = false
+        elseif flag == "Aimbot_ThirdPersonSens" then Flags[flag] = 3
+        elseif flag == "FOV_Enabled" then Flags[flag] = true
+        elseif flag == "FOV_Visible" then Flags[flag] = true
+        elseif flag == "FOV_Amount" then Flags[flag] = 90
+        elseif flag == "FOV_Transparency" then Flags[flag] = 0.5
+        elseif flag == "FOV_Thickness" then Flags[flag] = 1
+        elseif flag == "FOV_Filled" then Flags[flag] = false
+        elseif flag == "Wallhack_TeamCheck" then Flags[flag] = false
+        elseif flag == "Wallhack_AliveCheck" then Flags[flag] = true
+        elseif flag == "Wallhack_MaxDistance" then Flags[flag] = 1000
+        elseif flag == "ESP_Enabled" then Flags[flag] = true
+        elseif flag == "ESP_DisplayName" then Flags[flag] = true
+        elseif flag == "ESP_DisplayHealth" then Flags[flag] = true
+        elseif flag == "ESP_DisplayDistance" then Flags[flag] = true
+        elseif flag == "ESP_TextSize" then Flags[flag] = 14
+        elseif flag == "ESP_Transparency" then Flags[flag] = 0.7
+        elseif flag == "Tracers_Enabled" then Flags[flag] = true
+        elseif flag == "Tracers_Type" then Flags[flag] = "Bottom"
+        elseif flag == "Box_Enabled" then Flags[flag] = true
+        elseif flag == "Box_Type" then Flags[flag] = "3D Box"
+        elseif flag == "HeadDot_Enabled" then Flags[flag] = true
+        elseif flag == "Chams_Enabled" then Flags[flag] = false
+        elseif flag == "Chams_Transparency" then Flags[flag] = 0.2
+        elseif flag == "Chams_EntireBody" then Flags[flag] = false
+        elseif flag == "HealthBar_Enabled" then Flags[flag] = false
+        elseif flag == "HealthBar_Type" then Flags[flag] = "Left"
+        elseif flag == "Crosshair_Enabled" then Flags[flag] = false
+        elseif flag == "Crosshair_Size" then Flags[flag] = 12
+        end
+    end
+    
+    -- Reset colors
+    Flags["FOV_Color"] = Color3fromRGB(255, 255, 255)
+    Flags["FOV_LockedColor"] = Color3fromRGB(255, 70, 70)
+    Flags["ESP_TextColor"] = Color3fromRGB(255, 255, 255)
+    Flags["Tracers_Color"] = Color3fromRGB(255, 255, 255)
+    Flags["Box_Color"] = Color3fromRGB(255, 255, 255)
+    Flags["HeadDot_Color"] = Color3fromRGB(255, 255, 255)
+    Flags["Chams_Color"] = Color3fromRGB(255, 255, 255)
+    Flags["Crosshair_Color"] = Color3fromRGB(0, 255, 0)
+end)
+
+MainTabs.Utility:AddButton({
+    Text = "Restart Modules"
+}, function()
+    if Aimbot and Aimbot.Functions and Aimbot.Functions.Restart then
+        Aimbot.Functions:Restart()
+    end
+    
+    if WallHack and WallHack.Functions and WallHack.Functions.Restart then
+        WallHack.Functions:Restart()
+    end
+end)
+
+MainTabs.Utility:AddButton({
+    Text = "Unload (Exit)"
+}, function()
+    if Aimbot and Aimbot.Functions and Aimbot.Functions.Exit then
+        Aimbot.Functions:Exit()
+    end
+    
+    if WallHack and WallHack.Functions and WallHack.Functions.Exit then
+        WallHack.Functions:Exit()
+    end
+    
+    -- Clear flags
+    Flags = {}
+    
+    -- Notify
+    print("AirHub V2 Unloaded")
+end)
+
+--// Initialize Modules with Default Settings
+task.wait(1)
+
+-- Set Aimbot defaults
+if Aimbot and Aimbot.Settings then
+    Aimbot.Settings.Enabled = Flags["Aimbot_Enabled"]
+    Aimbot.Settings.TeamCheck = Flags["Aimbot_TeamCheck"]
+    Aimbot.Settings.AliveCheck = Flags["Aimbot_AliveCheck"]
+    Aimbot.Settings.WallCheck = Flags["Aimbot_WallCheck"]
+    Aimbot.Settings.Sensitivity = Flags["Aimbot_Sensitivity"]
+    Aimbot.Settings.ThirdPerson = Flags["Aimbot_ThirdPerson"]
+    Aimbot.Settings.ThirdPersonSensitivity = Flags["Aimbot_ThirdPersonSens"]
+    Aimbot.Settings.TriggerKey = Flags["Aimbot_TriggerKey"]
+    Aimbot.Settings.Toggle = Flags["Aimbot_Toggle"]
+    Aimbot.Settings.LockPart = Flags["Aimbot_LockPart"]
+end
+
+if Aimbot and Aimbot.FOVSettings then
+    Aimbot.FOVSettings.Enabled = Flags["FOV_Enabled"]
+    Aimbot.FOVSettings.Visible = Flags["FOV_Visible"]
+    Aimbot.FOVSettings.Amount = Flags["FOV_Amount"]
+    Aimbot.FOVSettings.Color = Flags["FOV_Color"]
+    Aimbot.FOVSettings.LockedColor = Flags["FOV_LockedColor"]
+    Aimbot.FOVSettings.Transparency = Flags["FOV_Transparency"]
+    Aimbot.FOVSettings.Thickness = Flags["FOV_Thickness"]
+    Aimbot.FOVSettings.Filled = Flags["FOV_Filled"]
+end
+
+-- Set Wallhack defaults
+if WallHack and WallHack.Settings then
+    WallHack.Settings.Enabled = Flags["Wallhack_Enabled"]
+    WallHack.Settings.TeamCheck = Flags["Wallhack_TeamCheck"]
+    WallHack.Settings.AliveCheck = Flags["Wallhack_AliveCheck"]
+    WallHack.Settings.MaxDistance = Flags["Wallhack_MaxDistance"]
+end
+
+if WallHack and WallHack.Visuals then
+    -- ESP
+    WallHack.Visuals.ESPSettings.Enabled = Flags["ESP_Enabled"]
+    WallHack.Visuals.ESPSettings.TextColor = Flags["ESP_TextColor"]
+    WallHack.Visuals.ESPSettings.TextSize = Flags["ESP_TextSize"]
+    WallHack.Visuals.ESPSettings.TextTransparency = Flags["ESP_Transparency"]
+    WallHack.Visuals.ESPSettings.DisplayName = Flags["ESP_DisplayName"]
+    WallHack.Visuals.ESPSettings.DisplayHealth = Flags["ESP_DisplayHealth"]
+    WallHack.Visuals.ESPSettings.DisplayDistance = Flags["ESP_DisplayDistance"]
+    
+    -- Tracers
+    WallHack.Visuals.TracersSettings.Enabled = Flags["Tracers_Enabled"]
+    WallHack.Visuals.TracersSettings.Color = Flags["Tracers_Color"]
+    local tracerType = Flags["Tracers_Type"]
+    WallHack.Visuals.TracersSettings.Type = tracerType == "Bottom" and 1 or tracerType == "Center" and 2 or 3
+    
+    -- Box
+    WallHack.Visuals.BoxSettings.Enabled = Flags["Box_Enabled"]
+    WallHack.Visuals.BoxSettings.Color = Flags["Box_Color"]
+    local boxType = Flags["Box_Type"]
+    WallHack.Visuals.BoxSettings.Type = boxType == "3D Box" and 1 or 2
+    
+    -- Head Dot
+    WallHack.Visuals.HeadDotSettings.Enabled = Flags["HeadDot_Enabled"]
+    WallHack.Visuals.HeadDotSettings.Color = Flags["HeadDot_Color"]
+    
+    -- Chams
+    WallHack.Visuals.ChamsSettings.Enabled = Flags["Chams_Enabled"]
+    WallHack.Visuals.ChamsSettings.Color = Flags["Chams_Color"]
+    WallHack.Visuals.ChamsSettings.Transparency = Flags["Chams_Transparency"]
+    WallHack.Visuals.ChamsSettings.EntireBody = Flags["Chams_EntireBody"]
+    
+    -- Health Bar
+    WallHack.Visuals.HealthBarSettings.Enabled = Flags["HealthBar_Enabled"]
+    local healthType = Flags["HealthBar_Type"]
+    WallHack.Visuals.HealthBarSettings.Type = healthType == "Top" and 1 or healthType == "Bottom" and 2 or healthType == "Left" and 3 or 4
+end
+
+if WallHack and WallHack.Crosshair and WallHack.Crosshair.Settings then
+    WallHack.Crosshair.Settings.Enabled = Flags["Crosshair_Enabled"]
+    WallHack.Crosshair.Settings.Color = Flags["Crosshair_Color"]
+    WallHack.Crosshair.Settings.Size = Flags["Crosshair_Size"]
+end
+
+print("AirHub V2 Loaded Successfully!")
