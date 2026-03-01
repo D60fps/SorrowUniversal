@@ -32,64 +32,53 @@ local MainWindow = Rayfield:CreateWindow({
 
 --// Tab/section wrappers so the rest of your code works unchanged
 local function MakeTab(name)
-    local tab = Rayfield -- placeholder, overwritten below
     local t = {}
     local _tab = MainWindow:CreateTab(name, 4483362458)
-    local _section = nil
-
-    local function getSection(label)
-        if not _section or _section._label ~= label then
-            _section = { _label = label, _tab = _tab:CreateSection(label) }
-        end
-        return _section._tab
-    end
+    -- Create a default section immediately so elements always have somewhere to go
+    local _curSection = _tab:CreateSection("Settings")
 
     function t:AddToggle(opts, cb)
-        local sec = getSection("Settings")
-        sec:CreateToggle({ Name=opts.Text, CurrentValue=opts.Default or false, Flag=opts.Flag,
-            Callback=function(v) Flags[opts.Flag]=v; if cb then cb(v) end end })
         Flags[opts.Flag] = opts.Default or false
+        _curSection:CreateToggle({ Name=opts.Text, CurrentValue=opts.Default or false, Flag=opts.Flag,
+            Callback=function(v) Flags[opts.Flag]=v; if cb then cb(v) end end })
         return { SetValue = function(_, v) Flags[opts.Flag]=v; if cb then cb(v) end end }
     end
 
     function t:AddSlider(opts, cb)
-        local sec = getSection("Settings")
-        sec:CreateSlider({ Name=opts.Text, Range={opts.Min or 0, opts.Max or 100},
-            Increment=opts.Suffix=="" and 0.01 or 1, Suffix=opts.Suffix or "",
+        Flags[opts.Flag] = opts.Default or 0
+        local inc = (opts.Max and opts.Max <= 1) and 0.01 or 1
+        _curSection:CreateSlider({ Name=opts.Text, Range={opts.Min or 0, opts.Max or 100},
+            Increment=inc, Suffix=opts.Suffix or "",
             CurrentValue=opts.Default or 0, Flag=opts.Flag,
             Callback=function(v) Flags[opts.Flag]=v; if cb then cb(v) end end })
-        Flags[opts.Flag] = opts.Default or 0
         return { SetValue = function(_, v) Flags[opts.Flag]=v; if cb then cb(v) end end }
     end
 
     function t:AddDropdown(opts, cb)
-        local sec = getSection("Settings")
-        sec:CreateDropdown({ Name=opts.Text, Options=opts.Values or {},
-            CurrentOption={opts.Default or (opts.Values and opts.Values[1]) or ""},
-            Flag=opts.Flag,
+        local def = opts.Default or (opts.Values and opts.Values[1]) or ""
+        Flags[opts.Flag] = def
+        _curSection:CreateDropdown({ Name=opts.Text, Options=opts.Values or {},
+            CurrentOption={def}, Flag=opts.Flag,
             Callback=function(v) local val=v[1]; Flags[opts.Flag]=val; if cb then cb(val) end end })
-        Flags[opts.Flag] = opts.Default or (opts.Values and opts.Values[1])
         return { SetValue = function(_, v) Flags[opts.Flag]=v; if cb then cb(v) end end }
     end
 
     function t:AddColorPicker(opts, cb)
-        local sec = getSection("Settings")
-        sec:CreateColorPicker({ Name=opts.Text, Color=opts.Default or Color3fromRGB(255,255,255),
-            Flag=opts.Flag,
+        local def = opts.Default or Color3fromRGB(255,255,255)
+        Flags[opts.Flag] = def
+        _curSection:CreateColorPicker({ Name=opts.Text, Color=def, Flag=opts.Flag,
             Callback=function(v) Flags[opts.Flag]=v; if cb then cb(v) end end })
-        Flags[opts.Flag] = opts.Default or Color3fromRGB(255,255,255)
         return { SetValue = function(_, v) Flags[opts.Flag]=v; if cb then cb(v) end end }
     end
 
     function t:AddButton(opts, cb)
-        local sec = getSection("Settings")
-        sec:CreateButton({ Name=opts.Text, Callback=function() if cb then cb() end end })
+        _curSection:CreateButton({ Name=opts.Text, Callback=function() if cb then cb() end end })
         return { Click = function() if cb then cb() end end }
     end
 
     function t:AddLabel(text)
-        -- Use label as section header for the next elements
-        _section = { _label = text, _tab = _tab:CreateSection(text) }
+        -- Each label becomes a new section header
+        _curSection = _tab:CreateSection(text)
     end
 
     return t
